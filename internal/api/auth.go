@@ -66,7 +66,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	//write header
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"message": "User successfully registered",
 		"user":    newUser,
 	})

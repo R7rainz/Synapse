@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: synapse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-synapse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-synapse}
+      POSTGRES_DB: ${POSTGRES_DB:-synapse}
+    ports:
+      # Loopback-only, and 5434 because 5432 and 5433 already belong to other
+      # projects on this machine. Nothing outside this host reaches the DB.
+      - "127.0.0.1:${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - synapse:/var/lib/postgresql/data
+      # No init-directory mount any more. It only ran on an empty volume, so a
+      # migration added later never reached an existing database — which is
+      # exactly how 0002_credentials went missing. The server now applies
+      # migrations itself at startup.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-synapse} -d ${POSTGRES_DB:-synapse}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  synapse:
+
