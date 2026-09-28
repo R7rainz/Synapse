@@ -1,6 +1,8 @@
 package user
 
+import "context"
+
 type Repository interface {
-	CreateUser(*User) error
-	GetUserByEmail(string) (*User, error)
+	CreateUser(context.Context, *User) error
+	GetUserByEmail(context.Context, string) (*User, error)
 }
