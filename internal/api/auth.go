@@ -59,7 +59,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "User store is not configured", http.StatusInternalServerError)
 		return
 	}
-	if err := h.users.CreateUser(newUser); err != nil {
+	if err := h.users.CreateUser(r.Context(), newUser); err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -84,7 +84,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "User store is not configured", http.StatusInternalServerError)
 		return
 	}
-	currentUser, err := h.users.GetUserByEmail(req.Email)
+	currentUser, err := h.users.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
 		http.Error(w, "Invalid JSON Body", http.StatusBadRequest)
 		return
