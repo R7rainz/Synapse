@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/r7rainz/synapse/internal/api"
+	apikey "github.com/r7rainz/synapse/internal/apiKey"
 	"github.com/r7rainz/synapse/internal/auth"
 	"github.com/r7rainz/synapse/internal/config"
 	"github.com/r7rainz/synapse/internal/user"
@@ -28,7 +29,8 @@ func main() {
 
 	tokens := auth.NewJWTService(cfg.JWTSecret)
 	users := user.NewPostgresRepository(pool)
-	handler := api.NewHandler(users, tokens)
+	keys := apikey.NewPostgresRepository(pool)
+	handler := api.NewHandler(users, keys, tokens)
 
 	log.Printf("Server running on port %s...", cfg.Port)
 	if err := http.ListenAndServe(cfg.Port, handler.Routes()); err != nil {
