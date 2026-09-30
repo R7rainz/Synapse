@@ -10,6 +10,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /register", h.HandleRegister)
 	mux.HandleFunc("POST /login", h.HandleLogin)
 	mux.Handle("GET /profile", h.tokens.Middleware(http.HandlerFunc(h.HandleProfile)))
+	mux.Handle("POST /api-keys", h.tokens.Middleware(http.HandlerFunc(h.HandlerCreateAPIKey)))
+	mux.Handle("DELETE /api-keys/{id}", h.tokens.Middleware(http.HandlerFunc(h.HandlerRevokeAPIKey)))
 
 	return mux
 }
