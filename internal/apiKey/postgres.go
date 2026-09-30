@@ -28,3 +28,9 @@ func (r *PostgresRepository) GetActiveAPIKeyByHash(ctx context.Context, hash str
 
 	return a, nil
 }
+
+func (r *PostgresRepository) RevokeAPIKey(ctx context.Context, userID, keyID string) error {
+	var revokedID string
+
+	return r.pool.QueryRow(ctx, `UPDATE api_keys SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL RETURNING id`, keyID, userID).Scan(&revokedID)
+}
