@@ -15,7 +15,7 @@ func (h *Handler) HandleProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"message": "Hello , welcome to your secure profile",
 		"user_id": claims.UserID,
 	})
