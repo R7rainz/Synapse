@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	apikey "github.com/r7rainz/synapse/internal/apiKey"
 	"github.com/r7rainz/synapse/internal/auth"
 	"github.com/r7rainz/synapse/internal/user"
 )
@@ -16,11 +17,12 @@ type Request struct {
 
 type Handler struct {
 	users  user.Repository
+	key    apikey.Repository
 	tokens *auth.JWTService
 }
 
-func NewHandler(users user.Repository, tokens *auth.JWTService) *Handler {
-	return &Handler{users: users, tokens: tokens}
+func NewHandler(users user.Repository, key apikey.Repository, tokens *auth.JWTService) *Handler {
+	return &Handler{users: users, key: key, tokens: tokens}
 }
 
 // http Handlers
@@ -41,7 +43,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//hash the password
+	// hash the password
 	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -54,7 +56,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    time.Now(),
 	}
 
-	//save to db
+	// save to db
 	if h.users == nil {
 		http.Error(w, "User store is not configured", http.StatusInternalServerError)
 		return
@@ -64,7 +66,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//write header
+	// write header
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
 		"message": "User successfully registered",
@@ -79,7 +81,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//fetch user from db
+	// fetch user from db
 	if h.users == nil {
 		http.Error(w, "User store is not configured", http.StatusInternalServerError)
 		return
@@ -90,13 +92,13 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//Compare bcrypt hashes
+	// Compare bcrypt hashes
 	if !auth.CheckPasswordHash(req.Password, currentUser.PasswordHash) {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	//generate access token
+	// generate access token
 	tokenString, err := h.tokens.Generate(currentUser.ID)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
@@ -104,7 +106,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"access_token": tokenString,
 		"token_type":   "Bearer",
 	})
