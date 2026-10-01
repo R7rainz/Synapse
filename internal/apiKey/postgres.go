@@ -34,3 +34,27 @@ func (r *PostgresRepository) RevokeAPIKey(ctx context.Context, userID, keyID str
 
 	return r.pool.QueryRow(ctx, `UPDATE api_keys SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL RETURNING id`, keyID, userID).Scan(&revokedID)
 }
+
+func (r *PostgresRepository) ListAPIKeysByUser(ctx context.Context, userID string) ([]*APIKey, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, user_id, name, key_prefix, created_at, last_used_at, expires_at, revoked_at FROM api_keys WHERE user_id=$1 ORDER BY created_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	keys := make([]*APIKey, 0)
+
+	for rows.Next() {
+		key := &APIKey{}
+
+		if err := rows.Scan(&key.ID, &key.UserID, &key.Name, &key.KeyPrefix, &key.CreatedAt, &key.LastUsedAt, &key.ExpiresAt, &key.RevokedAt); err != nil {
+			return nil, err
+		}
+
+		keys = append(keys, key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
