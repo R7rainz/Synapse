@@ -10,6 +10,7 @@ import (
 	apikey "github.com/r7rainz/synapse/internal/apiKey"
 	"github.com/r7rainz/synapse/internal/auth"
 	"github.com/r7rainz/synapse/internal/config"
+	"github.com/r7rainz/synapse/internal/gateway"
 	"github.com/r7rainz/synapse/internal/user"
 )
 
@@ -30,7 +31,8 @@ func main() {
 	tokens := auth.NewJWTService(cfg.JWTSecret)
 	users := user.NewPostgresRepository(pool)
 	keys := apikey.NewPostgresRepository(pool)
-	handler := api.NewHandler(users, keys, tokens)
+	gateway := gateway.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey)
+	handler := api.NewHandler(users, keys, tokens, gateway)
 
 	log.Printf("Server running on port %s...", cfg.Port)
 	if err := http.ListenAndServe(cfg.Port, handler.Routes()); err != nil {

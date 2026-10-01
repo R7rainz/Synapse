@@ -7,6 +7,7 @@ import (
 
 	apikey "github.com/r7rainz/synapse/internal/apiKey"
 	"github.com/r7rainz/synapse/internal/auth"
+	"github.com/r7rainz/synapse/internal/gateway"
 	"github.com/r7rainz/synapse/internal/user"
 )
 
@@ -16,13 +17,14 @@ type Request struct {
 }
 
 type Handler struct {
-	users  user.Repository
-	key    apikey.Repository
-	tokens *auth.JWTService
+	users   user.Repository
+	key     apikey.Repository
+	tokens  *auth.JWTService
+	gateway *gateway.Client
 }
 
-func NewHandler(users user.Repository, key apikey.Repository, tokens *auth.JWTService) *Handler {
-	return &Handler{users: users, key: key, tokens: tokens}
+func NewHandler(users user.Repository, key apikey.Repository, tokens *auth.JWTService, gateway *gateway.Client) *Handler {
+	return &Handler{users: users, key: key, tokens: tokens, gateway: gateway}
 }
 
 // http Handlers
