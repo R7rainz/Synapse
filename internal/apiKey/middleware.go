@@ -43,8 +43,8 @@ func Middleware(keys Repository, next http.Handler) http.Handler {
 		// 4. Its hash must exist in the database.
 		keyHash := HashAPIKey(parts[1])
 
-		// 5. GetActiveAPIKeyByHash also rejects revoked or expired keys.
-		key, err := keys.GetActiveAPIKeyByHash(r.Context(), keyHash)
+		// 5. AuthenticateAPIKeyByHash also rejects revoked or expired keys.
+		key, err := keys.AuthenticateAPIKeyByHash(r.Context(), keyHash)
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 			return
