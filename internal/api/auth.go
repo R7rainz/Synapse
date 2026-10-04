@@ -27,7 +27,6 @@ func NewHandler(users user.Repository, key apikey.Repository, tokens *auth.JWTSe
 	return &Handler{users: users, key: key, tokens: tokens, gateway: gateway}
 }
 
-// http Handlers
 func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

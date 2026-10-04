@@ -14,7 +14,6 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
-// Note: what scan does ? it get the returing stuff values into the variables
 func (r *PostgresRepository) CreateAPIKey(ctx context.Context, a *APIKey) error {
 	return r.pool.QueryRow(ctx, `INSERT INTO api_keys(user_id, name, key_prefix, key_hash, expires_at) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`, a.UserID, a.Name, a.KeyPrefix, a.KeyHash, a.ExpiresAt).Scan(&a.ID, &a.CreatedAt)
 }
