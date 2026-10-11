@@ -18,7 +18,7 @@ func (s *JWTService) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
+		parts := strings.Fields(authHeader)
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 			http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
 			return

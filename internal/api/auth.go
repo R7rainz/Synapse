@@ -2,12 +2,15 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	apikey "github.com/r7rainz/synapse/internal/apiKey"
 	"github.com/r7rainz/synapse/internal/auth"
 	"github.com/r7rainz/synapse/internal/gateway"
+	"github.com/r7rainz/synapse/internal/llmrequest"
 	"github.com/r7rainz/synapse/internal/user"
 )
 
@@ -17,19 +20,21 @@ type Request struct {
 }
 
 type Handler struct {
-	users   user.Repository
-	key     apikey.Repository
-	tokens  *auth.JWTService
-	gateway *gateway.Client
+	users      user.Repository
+	key        apikey.Repository
+	tokens     *auth.JWTService
+	gateway    *gateway.Client
+	llmrequest llmrequest.Repository
+	provider   string
 }
 
-func NewHandler(users user.Repository, key apikey.Repository, tokens *auth.JWTService, gateway *gateway.Client) *Handler {
-	return &Handler{users: users, key: key, tokens: tokens, gateway: gateway}
+func NewHandler(users user.Repository, key apikey.Repository, tokens *auth.JWTService, gateway *gateway.Client, requests llmrequest.Repository, provider string) *Handler {
+	return &Handler{users: users, key: key, tokens: tokens, gateway: gateway, llmrequest: requests, provider: provider}
 }
 
 func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	var req Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON Body", http.StatusBadRequest)
 		return
 	}
@@ -39,8 +44,8 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Password) < 8 {
-		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
+	if len(req.Password) < 8 || len(req.Password) > 72 {
+		http.Error(w, "Password must be 8-72 bytes", http.StatusBadRequest)
 		return
 	}
 
@@ -68,6 +73,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// write header
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
 		"message": "User successfully registered",
@@ -77,7 +83,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	var req Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
 		return
 	}
@@ -88,8 +94,12 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	currentUser, err := h.users.GetUserByEmail(r.Context(), req.Email)
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
 	if err != nil {
-		http.Error(w, "Invalid JSON Body", http.StatusBadRequest)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 

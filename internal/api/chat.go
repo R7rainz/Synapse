@@ -5,16 +5,24 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
+	"time"
 
 	apikey "github.com/r7rainz/synapse/internal/apiKey"
+	"github.com/r7rainz/synapse/internal/llmrequest"
 )
 
-const maxChatBodySize = 1 << 20 //1 Mib
+const maxChatBodySize = 1 << 20 // 1 Mib
+
+type ChatCompletionInput struct {
+	Model string `json:"model"`
+}
 
 func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
-	if _, ok := apikey.APIKeyFromContext(r.Context()); !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	key, ok := apikey.APIKeyFromContext(r.Context())
+	if !ok {
+		http.Error(w, "Not Authorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -30,12 +38,31 @@ func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if !json.Valid(body) {
-		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+	var input ChatCompletionInput
+	if err := json.Unmarshal(body, &input); err != nil || input.Model == "" {
+		http.Error(w, "A valid model is required", http.StatusBadRequest)
 		return
 	}
 
+	startedAt := time.Now()
 	response, err := h.gateway.ChatCompletions(r.Context(), bytes.NewReader(body))
+	statusCode := http.StatusBadGateway
+	if response != nil {
+		statusCode = response.StatusCode
+	}
+
+	request := &llmrequest.LLMRequest{
+		UserID:     key.UserID,
+		APIKeyID:   key.ID,
+		Provider:   h.provider,
+		Model:      input.Model,
+		StatusCode: statusCode,
+		LatencyMS:  int(time.Since(startedAt).Milliseconds()),
+	}
+	if logErr := h.llmrequest.CreateLLMRequest(r.Context(), request); logErr != nil {
+		log.Printf("failed to record LLM request: %v", logErr)
+	}
+
 	if err != nil {
 		http.Error(w, "LLM provider unavailable", http.StatusBadGateway)
 		return
