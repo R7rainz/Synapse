@@ -40,6 +40,7 @@ export default function DashboardPage() {
 
   const requestCount = summary?.request_count ?? 0;
   const errorCount = summary?.error_count ?? 0;
+  const rateLimitedCount = summary?.rate_limited_count ?? 0;
   const errorRate = requestCount === 0 ? 0 : Math.round((errorCount / requestCount) * 100);
   const activeKeys = keys.filter((key) => !key.revoked_at).length;
 
@@ -62,14 +63,15 @@ export default function DashboardPage() {
       {error && <p className="m-0 border-b border-danger/40 bg-danger/5 px-[clamp(1.25rem,4vw,4rem)] py-3 text-sm text-danger" role="alert">{error}</p>}
 
       <div className="mx-auto w-full max-w-[1500px]">
-        <section className="grid grid-cols-4 border-b border-line max-xl:grid-cols-2 max-sm:grid-cols-1" aria-label="Gateway metrics">
+        <section className="grid grid-cols-5 border-b border-line max-xl:grid-cols-2 max-sm:grid-cols-1" aria-label="Gateway metrics">
           {[
             ["Requests", loading ? "—" : requestCount.toLocaleString(), "last 24 hours"],
             ["Errors", loading ? "—" : errorCount.toLocaleString(), loading ? "loading" : `${errorRate}% of requests`],
+            ["Rate-limited", loading ? "—" : rateLimitedCount.toLocaleString(), "last 24 hours"],
             ["Average latency", loading ? "—" : `${summary?.average_latency_ms ?? 0} ms`, "last 24 hours"],
             ["Active API keys", loading ? "—" : activeKeys.toLocaleString(), `${keys.length} total credentials`],
           ].map(([label, value, detail], index) => (
-            <article className={`min-h-44 px-7 py-7 ${index > 0 ? "border-l border-line max-sm:border-l-0" : ""} ${index === 2 ? "max-xl:border-l-0 max-xl:border-t" : ""} ${index > 1 ? "max-xl:border-t" : ""}`} key={label}>
+            <article className={`min-h-44 px-7 py-7 ${index > 0 ? "border-l border-line max-sm:border-l-0" : ""} ${index >= 2 ? "max-xl:border-l-0 max-xl:border-t" : ""} ${index > 0 ? "max-xl:border-t" : ""}`} key={label}>
               <p className="m-0 font-mono text-[0.65rem] tracking-[0.08em] text-muted uppercase">{label}</p>
               <strong className="mt-7 block text-[clamp(2rem,4vw,3.8rem)] leading-none font-semibold tracking-[-0.05em] text-ink">{value}</strong>
               <span className="mt-3 block text-xs text-muted">{detail}</span>
@@ -98,6 +100,11 @@ export default function DashboardPage() {
               <div className="grid grid-cols-[28px_1fr] gap-3 border-b border-line py-3"><span className="text-muted">01</span><span className="text-soft">Application sends request</span></div>
               <div className="grid grid-cols-[28px_1fr] gap-3 border-b border-line py-3"><span className="text-brand">02</span><span className="text-ink">Synapse authenticates and forwards</span></div>
               <div className="grid grid-cols-[28px_1fr] gap-3 py-3"><span className="text-muted">03</span><span className="text-soft">Upstream generates response</span></div>
+            </div>
+
+            <div className="mt-8 border-y border-line font-mono text-xs">
+              <div className="flex items-center justify-between gap-4 border-b border-line py-3"><span className="text-muted">User limit</span><span className="text-soft">{summary?.user_requests_per_minute ?? 0}/min</span></div>
+              <div className="flex items-center justify-between gap-4 py-3"><span className="text-muted">Key limit</span><span className="text-soft">{summary?.api_key_requests_per_minute ?? 0}/min</span></div>
             </div>
           </aside>
         </section>

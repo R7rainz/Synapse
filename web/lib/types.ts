@@ -28,7 +28,10 @@ export type GatewaySummary = {
   window: "24h";
   request_count: number;
   error_count: number;
+  rate_limited_count: number;
   average_latency_ms: number;
+  user_requests_per_minute: number;
+  api_key_requests_per_minute: number;
 };
 
 export type GatewayRequest = {
