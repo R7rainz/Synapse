@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 
 export default function SignIn() {
@@ -30,23 +30,47 @@ export default function SignIn() {
   }
 
   return (
-    <section>
-      <h1>Sign in</h1>
-      <form onSubmit={submit}>
-        <label>
-          Email
-          <input name="email" type="email" autoComplete="email" required />
-        </label>
-        <label>
-          Password
-          <input name="password" type="password" autoComplete="current-password" required />
-        </label>
-        {error && <p role="alert">{error}</p>}
-        <button disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
-      </form>
-      <p>
-        No account? <Link href="/sign-up">Create one</Link>.
-      </p>
-    </section>
+    <div className="grid min-h-[calc(100svh-52px)] animate-page-in place-items-center py-10">
+      <section className="w-full max-w-[760px] overflow-hidden border border-line bg-surface shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+        <div className="flex h-9 items-center justify-between border-b border-line bg-raised px-3 font-mono text-[0.64rem] text-muted">
+          <span>~/synapse/auth</span><span>sign-in.ts</span><span>1 pane</span>
+        </div>
+        <div className="grid grid-cols-[180px_1fr] max-md:grid-cols-1">
+          <aside className="border-r border-line bg-canvas/45 p-4 font-mono text-[0.66rem] text-muted max-md:border-r-0 max-md:border-b">
+            <p className="mb-4 text-[0.58rem] tracking-[0.16em] text-soft uppercase">Session</p>
+            <p className="m-0 py-1 text-brand">› sign in</p>
+            <p className="m-0 py-1">  verify identity</p>
+            <p className="m-0 py-1">  open console</p>
+          </aside>
+          <div className="editor-grid px-[clamp(1.5rem,7vw,5rem)] py-[clamp(2.5rem,8vh,5.5rem)]">
+            <div className="mb-9">
+              <p className="mb-3 font-mono text-[0.66rem] text-brand">// existing operator</p>
+              <h1 className="mb-3 text-[clamp(2.5rem,6vw,4.5rem)] leading-none font-semibold tracking-[-0.055em]">Resume session.</h1>
+              <p className="m-0 max-w-md text-sm text-muted">Authenticate with the identity connected to your gateway workspace.</p>
+            </div>
+            <form className="grid gap-5" onSubmit={submit}>
+              <label className="grid gap-2 font-mono text-[0.66rem] text-soft">
+                email
+                <input className="h-11 border border-line-strong bg-canvas px-3 font-sans text-sm text-ink outline-none transition-colors focus:border-brand" name="email" type="email" autoComplete="email" placeholder="you@company.com" required />
+              </label>
+              <label className="grid gap-2 font-mono text-[0.66rem] text-soft">
+                password
+                <input className="h-11 border border-line-strong bg-canvas px-3 font-sans text-sm text-ink outline-none transition-colors focus:border-brand" name="password" type="password" autoComplete="current-password" placeholder="••••••••" required />
+              </label>
+              {error && <p className="m-0 border border-danger/50 bg-danger/5 px-3 py-2.5 font-mono text-xs text-danger" role="alert">{error}</p>}
+              <button className="mt-1 h-11 border border-brand bg-brand px-4 font-mono text-[0.68rem] font-bold text-canvas transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50" disabled={pending}>
+                {pending ? "authenticating…" : "sign in ↩"}
+              </button>
+            </form>
+            <p className="mt-8 mb-0 font-mono text-[0.66rem] text-muted">
+              new here? <Link className="text-brand underline decoration-line-strong underline-offset-4 hover:text-brand-light" href="/sign-up">initialize identity</Link>
+            </p>
+          </div>
+        </div>
+        <div className="flex min-h-9 items-center justify-between border-t border-line bg-raised px-3 font-mono text-[0.6rem] text-muted">
+          <span className="text-positive">● auth service ready</span><span>NORMAL</span>
+        </div>
+      </section>
+    </div>
   );
 }
