@@ -14,8 +14,10 @@ export async function apiFetch(path: string, init?: RequestInit) {
   return fetch(`${apiURL}${path}`, { ...init, headers });
 }
 
-export function apiKeyFetch(path: string, apiKey: string, init?: RequestInit) {
-  const headers = new Headers(init?.headers);
-  headers.set("Authorization", `Bearer ${apiKey}`);
-  return fetch(`${apiURL}${path}`, { ...init, headers });
+export async function readResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    throw new Error((await response.text()) || `Request failed with ${response.status}`);
+  }
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
 }

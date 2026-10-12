@@ -3,29 +3,31 @@
 @theme {
   --color-canvas: #090a0b;
   --color-surface: #0e1012;
-  --color-raised: #14171a;
-  --color-line: #25292e;
+  --color-raised: #15181b;
+  --color-line: #262a2f;
   --color-line-strong: #434950;
-  --color-ink: #d9dde2;
-  --color-soft: #adb3bb;
-  --color-muted: #747b84;
+  --color-ink: #e3e6e9;
+  --color-soft: #b2b7bd;
+  --color-muted: #777e87;
   --color-brand: #ff6b42;
   --color-brand-light: #ff987a;
   --color-positive: #a8df65;
   --color-danger: #ff6175;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --animate-page-in: page-in 360ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  --animate-page-in: page-in 240ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
 @layer base {
   * {
     box-sizing: border-box;
+    scrollbar-color: #434950 #0e1012;
+    scrollbar-width: thin;
   }
 
   html {
     scroll-behavior: smooth;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   body {
@@ -33,9 +35,9 @@
     min-height: 100vh;
     margin: 0;
     background: #090a0b;
-    color: #d9dde2;
+    color: #e3e6e9;
     line-height: 1.5;
-    overflow-x: hidden;
+    overflow-x: clip;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -53,62 +55,38 @@
   button,
   a,
   input,
-  textarea {
+  textarea,
+  summary {
     outline-color: #ff6b42;
     outline-offset: 3px;
   }
 
   input::placeholder,
   textarea::placeholder {
-    color: #5e646c;
-  }
-
-  * {
-    scrollbar-width: none;
-  }
-
-  *::-webkit-scrollbar {
-    display: none;
+    color: #666d75;
   }
 }
 
-.editor-grid {
+.surface-grid {
   background-image:
-    linear-gradient(rgba(217, 221, 226, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(217, 221, 226, 0.018) 1px, transparent 1px);
-  background-size: 100% 26px, 52px 100%;
+    linear-gradient(rgba(227, 230, 233, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(227, 230, 233, 0.018) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 
 .dot-field {
-  background-image: radial-gradient(rgba(217, 221, 226, 0.12) 0.7px, transparent 0.7px);
-  background-size: 7px 7px;
-}
-
-.terminal-caret::after {
-  display: inline-block;
-  width: 0.62em;
-  height: 1em;
-  margin-left: 0.2em;
-  background: #ff6b42;
-  vertical-align: -0.12em;
-  content: "";
-  animation: caret-blink 1.1s steps(1) infinite;
+  background-image: radial-gradient(rgba(227, 230, 233, 0.15) 0.7px, transparent 0.7px);
+  background-size: 8px 8px;
 }
 
 @keyframes page-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(5px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes caret-blink {
-  50% {
-    opacity: 0;
   }
 }
 
