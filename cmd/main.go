@@ -42,7 +42,19 @@ func main() {
 	gateway := gateway.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey)
 	requests := llmrequest.NewPostgresRepository(pool)
 	documents := document.NewPostgresRepository(pool)
-	handler := api.NewHandler(keys, verifier, gateway, requests, documents, cfg.LLMProvider, cfg.LLMEmbeddingModel)
+	handler := api.NewHandler(
+		keys,
+		verifier,
+		gateway,
+		requests,
+		documents,
+		cfg.LLMProvider,
+		cfg.LLMEmbeddingModel,
+		api.RateLimitConfig{
+			UserRequestsPerMinute:   cfg.GatewayUserRequestsPerMinute,
+			APIKeyRequestsPerMinute: cfg.GatewayAPIKeyRequestsPerMinute,
+		},
+	)
 
 	log.Printf("Server running on port %s...", cfg.Port)
 	server := &http.Server{

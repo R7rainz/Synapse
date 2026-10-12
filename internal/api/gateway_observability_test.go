@@ -13,9 +13,15 @@ func TestGatewaySummary(t *testing.T) {
 	repository := &recordingLLMRequests{summary: &llmrequest.Summary{
 		RequestCount:     12,
 		ErrorCount:       2,
+		RateLimitedCount: 1,
 		AverageLatencyMS: 340,
 	}}
-	handler := &Handler{llmrequest: repository, provider: "test-provider"}
+	handler := &Handler{
+		llmrequest:              repository,
+		provider:                "test-provider",
+		userRequestsPerMinute:   60,
+		apiKeyRequestsPerMinute: 30,
+	}
 	request := httptest.NewRequest(http.MethodGet, "/gateway/summary", nil)
 	response := httptest.NewRecorder()
 
@@ -29,12 +35,15 @@ func TestGatewaySummary(t *testing.T) {
 		Window           string `json:"window"`
 		RequestCount     int64  `json:"request_count"`
 		ErrorCount       int64  `json:"error_count"`
+		RateLimitedCount int64  `json:"rate_limited_count"`
 		AverageLatencyMS int64  `json:"average_latency_ms"`
+		UserLimit        int    `json:"user_requests_per_minute"`
+		APIKeyLimit      int    `json:"api_key_requests_per_minute"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
 		t.Fatal(err)
 	}
-	if repository.userID != "user-id" || result.Provider != "test-provider" || result.Window != "24h" || result.RequestCount != 12 || result.ErrorCount != 2 || result.AverageLatencyMS != 340 {
+	if repository.userID != "user-id" || result.Provider != "test-provider" || result.Window != "24h" || result.RequestCount != 12 || result.ErrorCount != 2 || result.RateLimitedCount != 1 || result.AverageLatencyMS != 340 || result.UserLimit != 60 || result.APIKeyLimit != 30 {
 		t.Fatalf("unexpected summary: %#v", result)
 	}
 }

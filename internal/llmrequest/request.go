@@ -12,12 +12,25 @@ type LLMRequest struct {
 	OutputTokens int
 	StatusCode   int
 	LatencyMS    int
+	RateLimited  bool
 	CreatedAt    time.Time
+}
+
+const (
+	RateLimitScopeUser   = "user"
+	RateLimitScopeAPIKey = "api_key"
+)
+
+type RateLimitResult struct {
+	Allowed   bool
+	Remaining int64
+	ResetAt   time.Time
 }
 
 type Summary struct {
 	RequestCount     int64 `json:"request_count"`
 	ErrorCount       int64 `json:"error_count"`
+	RateLimitedCount int64 `json:"rate_limited_count"`
 	AverageLatencyMS int64 `json:"average_latency_ms"`
 }
 

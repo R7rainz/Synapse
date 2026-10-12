@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/r7rainz/synapse/internal/document"
 	"github.com/r7rainz/synapse/internal/gateway"
@@ -15,16 +16,30 @@ import (
 )
 
 type recordingLLMRequests struct {
-	request  *llmrequest.LLMRequest
-	summary  *llmrequest.Summary
-	requests []*llmrequest.RequestRecord
-	userID   string
-	limit    int
+	request         *llmrequest.LLMRequest
+	summary         *llmrequest.Summary
+	requests        []*llmrequest.RequestRecord
+	userID          string
+	limit           int
+	rateLimitResult *llmrequest.RateLimitResult
+	rateLimitError  error
+	rateLimitScopes []string
 }
 
 func (r *recordingLLMRequests) CreateLLMRequest(_ context.Context, request *llmrequest.LLMRequest) error {
 	r.request = request
 	return nil
+}
+
+func (r *recordingLLMRequests) ConsumeRateLimit(_ context.Context, scope, scopeID string, _ int) (*llmrequest.RateLimitResult, error) {
+	r.rateLimitScopes = append(r.rateLimitScopes, scope+":"+scopeID)
+	if r.rateLimitError != nil {
+		return nil, r.rateLimitError
+	}
+	if r.rateLimitResult != nil {
+		return r.rateLimitResult, nil
+	}
+	return &llmrequest.RateLimitResult{Allowed: true}, nil
 }
 
 func (r *recordingLLMRequests) SummaryByUser(_ context.Context, userID string) (*llmrequest.Summary, error) {
@@ -141,6 +156,49 @@ func TestChatReturnsServiceUnavailableWithoutProvider(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), "provider_not_configured") {
 		t.Fatalf("unexpected body: %s", response.Body.String())
+	}
+}
+
+func TestChatRejectsRateLimit(t *testing.T) {
+	repository := &recordingLLMRequests{rateLimitResult: &llmrequest.RateLimitResult{
+		ResetAt: time.Now().Add(30 * time.Second),
+	}}
+	handler := &Handler{
+		gateway:                 gateway.NewClient("", ""),
+		llmrequest:              repository,
+		userRequestsPerMinute:   60,
+		apiKeyRequestsPerMinute: 60,
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`))
+	response := httptest.NewRecorder()
+
+	handler.handleChatCompletions(response, request, "user-id", nil)
+
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") == "" {
+		t.Fatalf("status = %d, retry-after = %q", response.Code, response.Header().Get("Retry-After"))
+	}
+	if !strings.Contains(response.Body.String(), "rate_limit_exceeded") {
+		t.Fatalf("unexpected body: %s", response.Body.String())
+	}
+	if repository.request == nil || repository.request.StatusCode != http.StatusTooManyRequests || !repository.request.RateLimited {
+		t.Fatalf("unexpected request log: %#v", repository.request)
+	}
+}
+
+func TestChatConsumesUserAndAPIKeyLimits(t *testing.T) {
+	repository := &recordingLLMRequests{}
+	handler := &Handler{
+		llmrequest:              repository,
+		userRequestsPerMinute:   60,
+		apiKeyRequestsPerMinute: 30,
+	}
+	keyID := "key-id"
+
+	if _, err := handler.consumeChatRateLimits(context.Background(), "user-id", &keyID); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(repository.rateLimitScopes, ",") != "user:user-id,api_key:key-id" {
+		t.Fatalf("scopes = %#v", repository.rateLimitScopes)
 	}
 }
 

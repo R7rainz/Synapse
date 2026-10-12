@@ -9,15 +9,32 @@ import (
 )
 
 type Handler struct {
-	key            apikey.Repository
-	auth           *auth.Verifier
-	gateway        *gateway.Client
-	llmrequest     llmrequest.Repository
-	documents      document.Repository
-	provider       string
-	embeddingModel string
+	key                     apikey.Repository
+	auth                    *auth.Verifier
+	gateway                 *gateway.Client
+	llmrequest              llmrequest.Repository
+	documents               document.Repository
+	provider                string
+	embeddingModel          string
+	userRequestsPerMinute   int
+	apiKeyRequestsPerMinute int
 }
 
-func NewHandler(key apikey.Repository, verifier *auth.Verifier, gateway *gateway.Client, requests llmrequest.Repository, documents document.Repository, provider, embeddingModel string) *Handler {
-	return &Handler{key: key, auth: verifier, gateway: gateway, llmrequest: requests, documents: documents, provider: provider, embeddingModel: embeddingModel}
+type RateLimitConfig struct {
+	UserRequestsPerMinute   int
+	APIKeyRequestsPerMinute int
+}
+
+func NewHandler(key apikey.Repository, verifier *auth.Verifier, gateway *gateway.Client, requests llmrequest.Repository, documents document.Repository, provider, embeddingModel string, limits RateLimitConfig) *Handler {
+	return &Handler{
+		key:                     key,
+		auth:                    verifier,
+		gateway:                 gateway,
+		llmrequest:              requests,
+		documents:               documents,
+		provider:                provider,
+		embeddingModel:          embeddingModel,
+		userRequestsPerMinute:   limits.UserRequestsPerMinute,
+		apiKeyRequestsPerMinute: limits.APIKeyRequestsPerMinute,
+	}
 }

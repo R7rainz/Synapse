@@ -110,6 +110,20 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	rateLimit, err := h.consumeChatRateLimits(r.Context(), userID, apiKeyID)
+	if err != nil {
+		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusServiceUnavailable, time.Now(), false)
+		writeChatError(w, http.StatusServiceUnavailable, "Rate limiting is unavailable", "rate_limit_unavailable")
+		return
+	}
+	if rateLimit != nil && !rateLimit.Allowed {
+		retryAfter := rateLimitRetryAfter(rateLimit.ResetAt)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusTooManyRequests, time.Now(), true)
+		writeChatError(w, http.StatusTooManyRequests, "Rate limit exceeded", "rate_limit_exceeded")
+		return
+	}
+
 	if len(input.DocumentIDs) > 0 {
 		documentIDs, err := normalizeDocumentIDs(input.DocumentIDs)
 		if err != nil {
@@ -167,7 +181,7 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 			message = "LLM provider is not configured"
 			code = "provider_not_configured"
 		}
-		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, status, startedAt)
+		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, status, startedAt, false)
 		writeChatError(w, status, message, code)
 		return
 	}
@@ -180,7 +194,7 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 		var ok bool
 		flusher, ok = w.(http.Flusher)
 		if !ok {
-			h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusInternalServerError, startedAt)
+			h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusInternalServerError, startedAt, false)
 			writeChatError(w, http.StatusInternalServerError, "Streaming is not supported by this server", "streaming_unavailable")
 			return
 		}
@@ -190,7 +204,51 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 	if _, err := io.Copy(flushingWriter{Writer: w, Flusher: flusher}, response.Body); err != nil {
 		log.Printf("failed to copy LLM response: %v", err)
 	}
-	h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, response.StatusCode, startedAt)
+	h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, response.StatusCode, startedAt, false)
+}
+
+func (h *Handler) consumeChatRateLimits(ctx context.Context, userID string, apiKeyID *string) (*llmrequest.RateLimitResult, error) {
+	if h.llmrequest == nil || h.userRequestsPerMinute < 1 {
+		return nil, nil
+	}
+
+	result, err := h.llmrequest.ConsumeRateLimit(ctx, llmrequest.RateLimitScopeUser, userID, h.userRequestsPerMinute)
+	if err != nil {
+		return result, err
+	}
+	if result == nil {
+		return nil, errors.New("rate limiter returned an empty result")
+	}
+	if !result.Allowed {
+		return result, nil
+	}
+	if apiKeyID == nil || h.apiKeyRequestsPerMinute < 1 {
+		return nil, nil
+	}
+
+	result, err = h.llmrequest.ConsumeRateLimit(ctx, llmrequest.RateLimitScopeAPIKey, *apiKeyID, h.apiKeyRequestsPerMinute)
+	if err != nil {
+		return result, err
+	}
+	if result == nil {
+		return nil, errors.New("rate limiter returned an empty result")
+	}
+	if !result.Allowed {
+		return result, nil
+	}
+	return nil, nil
+}
+
+func rateLimitRetryAfter(resetAt time.Time) int {
+	remaining := time.Until(resetAt)
+	seconds := int(remaining / time.Second)
+	if remaining > time.Duration(seconds)*time.Second {
+		seconds++
+	}
+	if seconds < 1 {
+		return 1
+	}
+	return seconds
 }
 
 type flushingWriter struct {
@@ -312,16 +370,17 @@ func copyUpstreamHeaders(destination, source http.Header) {
 	}
 }
 
-func (h *Handler) recordLLMRequest(ctx context.Context, userID string, apiKeyID *string, model string, statusCode int, startedAt time.Time) {
+func (h *Handler) recordLLMRequest(ctx context.Context, userID string, apiKeyID *string, model string, statusCode int, startedAt time.Time, rateLimited bool) {
 	logContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 	defer cancel()
 	request := &llmrequest.LLMRequest{
-		UserID:     userID,
-		APIKeyID:   apiKeyID,
-		Provider:   h.provider,
-		Model:      model,
-		StatusCode: statusCode,
-		LatencyMS:  int(time.Since(startedAt).Milliseconds()),
+		UserID:      userID,
+		APIKeyID:    apiKeyID,
+		Provider:    h.provider,
+		Model:       model,
+		StatusCode:  statusCode,
+		LatencyMS:   int(time.Since(startedAt).Milliseconds()),
+		RateLimited: rateLimited,
 	}
 	if err := h.llmrequest.CreateLLMRequest(logContext, request); err != nil {
 		log.Printf("failed to record LLM request: %v", err)

@@ -15,7 +15,35 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 }
 
 func (r *PostgresRepository) CreateLLMRequest(ctx context.Context, req *LLMRequest) error {
-	return r.pool.QueryRow(ctx, `INSERT INTO llm_requests(user_id, api_key_id, provider, model, input_tokens, output_tokens, status_code, latency_ms) VALUES($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at`, req.UserID, req.APIKeyID, req.Provider, req.Model, req.InputTokens, req.OutputTokens, req.StatusCode, req.LatencyMS).Scan(&req.ID, &req.CreatedAt)
+	return r.pool.QueryRow(ctx, `INSERT INTO llm_requests(user_id, api_key_id, provider, model, input_tokens, output_tokens, status_code, latency_ms, rate_limited) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at`, req.UserID, req.APIKeyID, req.Provider, req.Model, req.InputTokens, req.OutputTokens, req.StatusCode, req.LatencyMS, req.RateLimited).Scan(&req.ID, &req.CreatedAt)
+}
+
+func (r *PostgresRepository) ConsumeRateLimit(ctx context.Context, scope, scopeID string, limit int) (*RateLimitResult, error) {
+	result := &RateLimitResult{}
+	var count int64
+	if err := r.pool.QueryRow(ctx, `
+		INSERT INTO gateway_rate_limit_windows(scope_type, scope_id, window_start, request_count)
+		VALUES ($1, $2, date_trunc('minute', timezone('UTC', now())) AT TIME ZONE 'UTC', 1)
+		ON CONFLICT (scope_type, scope_id, window_start)
+		DO UPDATE SET request_count = LEAST(gateway_rate_limit_windows.request_count + 1, $3::bigint + 1)
+		RETURNING request_count, window_start + interval '1 minute'
+	`, scope, scopeID, limit).Scan(&count, &result.ResetAt); err != nil {
+		return nil, err
+	}
+
+	result.Allowed = count <= int64(limit)
+	result.Remaining = int64(limit) - count
+	if result.Remaining < 0 {
+		result.Remaining = 0
+	}
+	if count == 1 {
+		// Best-effort pruning keeps the limiter table bounded without a worker.
+		_, _ = r.pool.Exec(ctx, `
+			DELETE FROM gateway_rate_limit_windows
+			WHERE window_start < date_trunc('minute', timezone('UTC', now())) AT TIME ZONE 'UTC' - interval '2 minutes'
+		`)
+	}
+	return result, nil
 }
 
 func (r *PostgresRepository) SummaryByUser(ctx context.Context, userID string) (*Summary, error) {
@@ -24,10 +52,11 @@ func (r *PostgresRepository) SummaryByUser(ctx context.Context, userID string) (
 		SELECT
 			COUNT(*),
 			COUNT(*) FILTER (WHERE status_code < 200 OR status_code >= 300),
+			COUNT(*) FILTER (WHERE rate_limited),
 			COALESCE(ROUND(AVG(latency_ms)), 0)::bigint
 		FROM llm_requests
 		WHERE user_id = $1 AND created_at >= now() - interval '24 hours'
-	`, userID).Scan(&summary.RequestCount, &summary.ErrorCount, &summary.AverageLatencyMS)
+	`, userID).Scan(&summary.RequestCount, &summary.ErrorCount, &summary.RateLimitedCount, &summary.AverageLatencyMS)
 	if err != nil {
 		return nil, err
 	}
