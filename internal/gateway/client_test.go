@@ -1,11 +1,20 @@
 package gateway
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
+
+func TestChatCompletionsRequiresProvider(t *testing.T) {
+	_, err := NewClient("", "").ChatCompletions(t.Context(), bytes.NewBufferString(`{}`))
+	if !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("error = %v, want ErrNotConfigured", err)
+	}
+}
 
 func TestEmbeddings(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

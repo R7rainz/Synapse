@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 )
+
+var ErrNotConfigured = errors.New("LLM provider is not configured")
 
 type Client struct {
 	baseURL    string
@@ -18,16 +21,21 @@ type Client struct {
 }
 
 func NewClient(baseURL, apiKey string) *Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = 30 * time.Second
+
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
-		httpClient: &http.Client{
-			Timeout: 2 * time.Minute,
-		},
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		apiKey:     apiKey,
+		httpClient: &http.Client{Transport: transport},
 	}
 }
 
 func (c *Client) ChatCompletions(ctx context.Context, body io.Reader) (*http.Response, error) {
+	if c.baseURL == "" {
+		return nil, ErrNotConfigured
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", body)
 	if err != nil {
 		return nil, err
