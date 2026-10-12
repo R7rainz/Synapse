@@ -12,7 +12,7 @@
 - [ ] Start local Postgres if needed: `docker compose up -d`.
 - [ ] Apply migrations against the configured database:
   `bash -c 'set -a; source .env; exec mise exec go@1.27.1 -- goose -dir migrations postgres "$DATABASE_URL" up'`
-- [ ] Start Next.js: `cd web && npm install && npm run dev`.
+- [ ] Start Next.js: `cd web && bun install && bun run dev`.
 - [ ] Start Go in another terminal: `bash -c 'set -a; source .env; exec go run ./cmd'`.
 
 ## 2. Verify authentication end to end
@@ -26,7 +26,7 @@
 - [ ] Confirm the existing legacy user can sign in after the Better Auth migration.
 - [ ] Run `go test ./...`.
 - [ ] Run `go vet ./...`.
-- [ ] Run `cd web && npm run typecheck && npm run build`.
+- [ ] Run `cd web && bun run typecheck && bun run build`.
 - [ ] Test the migration on a backup or disposable database before applying it to production.
 
 ## 3. Production auth hardening
