@@ -1,0 +1,76 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+
+	"github.com/r7rainz/synapse/internal/auth"
+)
+
+const (
+	defaultRequestLimit = 50
+	maxRequestLimit     = 100
+)
+
+func (h *Handler) HandleGatewaySummary(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	h.handleGatewaySummary(w, r, claims.Subject)
+}
+
+func (h *Handler) handleGatewaySummary(w http.ResponseWriter, r *http.Request, userID string) {
+	summary, err := h.llmrequest.SummaryByUser(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "Could not load gateway summary", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		Provider         string `json:"provider"`
+		Window           string `json:"window"`
+		RequestCount     int64  `json:"request_count"`
+		ErrorCount       int64  `json:"error_count"`
+		AverageLatencyMS int64  `json:"average_latency_ms"`
+	}{
+		Provider:         h.provider,
+		Window:           "24h",
+		RequestCount:     summary.RequestCount,
+		ErrorCount:       summary.ErrorCount,
+		AverageLatencyMS: summary.AverageLatencyMS,
+	})
+}
+
+func (h *Handler) HandleGatewayRequests(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	h.handleGatewayRequests(w, r, claims.Subject)
+}
+
+func (h *Handler) handleGatewayRequests(w http.ResponseWriter, r *http.Request, userID string) {
+	limit := defaultRequestLimit
+	if value := r.URL.Query().Get("limit"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > maxRequestLimit {
+			http.Error(w, "Limit must be between 1 and 100", http.StatusBadRequest)
+			return
+		}
+		limit = parsed
+	}
+
+	requests, err := h.llmrequest.ListByUser(r.Context(), userID, limit)
+	if err != nil {
+		http.Error(w, "Could not load gateway requests", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(requests)
+}
