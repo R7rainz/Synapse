@@ -1,50 +1,44 @@
 package auth
 
 import (
+	"context"
 	"fmt"
-	"time"
 
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type Claims struct {
-	UserID string `json:"user_id"`
 	jwt.RegisteredClaims
 }
 
-type JWTService struct {
-	key []byte
+type Verifier struct {
+	keys     keyfunc.Keyfunc
+	issuer   string
+	audience string
 }
 
-func NewJWTService(key []byte) *JWTService {
-	return &JWTService{key: key}
-}
-
-func (s *JWTService) Generate(userID string) (string, error) {
-	expirationTime := time.Now().Add(1 * time.Hour)
-
-	claims := &Claims{
-		UserID: userID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "synapse_auth",
-		},
+func NewVerifier(ctx context.Context, jwksURL, issuer, audience string) (*Verifier, error) {
+	keys, err := keyfunc.NewDefaultCtx(ctx, []string{jwksURL})
+	if err != nil {
+		return nil, fmt.Errorf("load JWKS: %w", err)
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(s.key)
+	return &Verifier{keys: keys, issuer: issuer, audience: audience}, nil
 }
 
-func (s *JWTService) Parse(tokenString string) (*Claims, error) {
+func (v *Verifier) Parse(tokenString string) (*Claims, error) {
 	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
-		if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return s.key, nil
-	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
-	if err != nil || token == nil || !token.Valid || claims.UserID == "" {
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		claims,
+		v.keys.Keyfunc,
+		jwt.WithValidMethods([]string{jwt.SigningMethodEdDSA.Alg()}),
+		jwt.WithIssuer(v.issuer),
+		jwt.WithAudience(v.audience),
+		jwt.WithExpirationRequired(),
+	)
+	if err != nil || token == nil || !token.Valid || claims.Subject == "" {
 		return nil, fmt.Errorf("invalid or expired token")
 	}
 

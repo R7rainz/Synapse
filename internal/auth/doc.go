@@ -1,2 +1,2 @@
-// Package auth handles password hashing, JWT creation, and JWT authentication.
+// Package auth verifies Better Auth JWTs and exposes authenticated user claims.
 package auth

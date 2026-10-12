@@ -37,7 +37,7 @@ func (h *Handler) HandlerCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := &apikey.APIKey{
-		UserID:    claims.UserID,
+		UserID:    claims.Subject,
 		Name:      name,
 		KeyPrefix: prefix,
 		KeyHash:   hash,
@@ -66,7 +66,7 @@ func (h *Handler) HandlerRevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	err := h.key.RevokeAPIKey(r.Context(), claims.UserID, keyID)
+	err := h.key.RevokeAPIKey(r.Context(), claims.Subject, keyID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.Error(w, "API key not found", http.StatusNotFound)
 		return
@@ -85,7 +85,7 @@ func (h *Handler) HandlerListAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keys, err := h.key.ListAPIKeysByUser(r.Context(), claims.UserID)
+	keys, err := h.key.ListAPIKeysByUser(r.Context(), claims.Subject)
 	if err != nil {
 		http.Error(w, "Could not list API Keys", http.StatusInternalServerError)
 		return

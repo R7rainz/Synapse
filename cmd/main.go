@@ -11,20 +11,18 @@ import (
 	apikey "github.com/r7rainz/synapse/internal/apiKey"
 	"github.com/r7rainz/synapse/internal/auth"
 	"github.com/r7rainz/synapse/internal/config"
+	"github.com/r7rainz/synapse/internal/document"
 	"github.com/r7rainz/synapse/internal/gateway"
 	"github.com/r7rainz/synapse/internal/llmrequest"
-	"github.com/r7rainz/synapse/internal/user"
 )
 
 func main() {
 	cfg := config.Load()
-	if len(cfg.JWTSecret) < 32 {
-		log.Fatal("JWT_SECRET must contain at least 32 bytes")
-	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -36,17 +34,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	tokens := auth.NewJWTService(cfg.JWTSecret)
-	users := user.NewPostgresRepository(pool)
+	verifier, err := auth.NewVerifier(ctx, cfg.AuthJWKSURL, cfg.AuthIssuer, cfg.AuthAudience)
+	if err != nil {
+		log.Fatal(err)
+	}
 	keys := apikey.NewPostgresRepository(pool)
 	gateway := gateway.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey)
 	requests := llmrequest.NewPostgresRepository(pool)
-	handler := api.NewHandler(users, keys, tokens, gateway, requests, cfg.LLMProvider)
+	documents := document.NewPostgresRepository(pool)
+	handler := api.NewHandler(keys, verifier, gateway, requests, documents, cfg.LLMProvider, cfg.LLMEmbeddingModel)
 
 	log.Printf("Server running on port %s...", cfg.Port)
 	server := &http.Server{
 		Addr:              cfg.Port,
-		Handler:           handler.Routes(),
+		Handler:           api.CORS(cfg.FrontendOrigin, handler.Routes()),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      3 * time.Minute,

@@ -10,7 +10,7 @@ type contextKey string
 
 const userContextKey contextKey = "user_claims"
 
-func (s *JWTService) Middleware(next http.Handler) http.Handler {
+func (v *Verifier) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -24,7 +24,7 @@ func (s *JWTService) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		claims, err := s.Parse(parts[1])
+		claims, err := v.Parse(parts[1])
 		if err != nil {
 			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 			return

@@ -1,2 +1,2 @@
-// Package gateway forwards chat completion requests to an upstream LLM provider.
+// Package gateway forwards chat completion and embedding requests to an upstream LLM provider.
 package gateway
