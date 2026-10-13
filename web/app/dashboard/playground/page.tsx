@@ -71,7 +71,7 @@ export default function PlaygroundPage() {
   const [documentsPending, setDocumentsPending] = useState(true);
   const [selectedDocumentIDs, setSelectedDocumentIDs] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
-  const [model, setModel] = useState("");
+  const [model, setModel] = useState("gpt-4.1-mini");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState("");
