@@ -106,6 +106,11 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between gap-4 border-b border-line py-3"><span className="text-muted">User limit</span><span className="text-soft">{summary?.user_requests_per_minute ?? 0}/min</span></div>
               <div className="flex items-center justify-between gap-4 py-3"><span className="text-muted">Key limit</span><span className="text-soft">{summary?.api_key_requests_per_minute ?? 0}/min</span></div>
             </div>
+
+            <div className="mt-8 border-y border-line font-mono text-xs">
+              <div className="border-b border-line py-3"><span className="text-muted">24h tokens</span><div className="mt-2 flex justify-between gap-4 text-soft"><span>{(summary?.input_tokens ?? 0).toLocaleString()} in</span><span>{(summary?.output_tokens ?? 0).toLocaleString()} out</span></div></div>
+              <div className="flex items-center justify-between gap-4 py-3"><span className="text-muted">Month to date</span><span className="text-soft">{(summary?.monthly_tokens ?? 0).toLocaleString()} / {summary?.monthly_token_quota ? summary.monthly_token_quota.toLocaleString() : "∞"}</span></div>
+            </div>
           </aside>
         </section>
 

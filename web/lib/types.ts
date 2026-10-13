@@ -32,6 +32,10 @@ export type GatewaySummary = {
   average_latency_ms: number;
   user_requests_per_minute: number;
   api_key_requests_per_minute: number;
+  input_tokens: number;
+  output_tokens: number;
+  monthly_tokens: number;
+  monthly_token_quota: number;
 };
 
 export type GatewayRequest = {

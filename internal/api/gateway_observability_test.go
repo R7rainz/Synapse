@@ -15,12 +15,16 @@ func TestGatewaySummary(t *testing.T) {
 		ErrorCount:       2,
 		RateLimitedCount: 1,
 		AverageLatencyMS: 340,
+		InputTokens:      100,
+		OutputTokens:     40,
+		MonthlyTokens:    200,
 	}}
 	handler := &Handler{
 		llmrequest:              repository,
 		provider:                "test-provider",
 		userRequestsPerMinute:   60,
 		apiKeyRequestsPerMinute: 30,
+		userTokensPerMonth:      1000,
 	}
 	request := httptest.NewRequest(http.MethodGet, "/gateway/summary", nil)
 	response := httptest.NewRecorder()
@@ -31,19 +35,23 @@ func TestGatewaySummary(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
 	var result struct {
-		Provider         string `json:"provider"`
-		Window           string `json:"window"`
-		RequestCount     int64  `json:"request_count"`
-		ErrorCount       int64  `json:"error_count"`
-		RateLimitedCount int64  `json:"rate_limited_count"`
-		AverageLatencyMS int64  `json:"average_latency_ms"`
-		UserLimit        int    `json:"user_requests_per_minute"`
-		APIKeyLimit      int    `json:"api_key_requests_per_minute"`
+		Provider          string `json:"provider"`
+		Window            string `json:"window"`
+		RequestCount      int64  `json:"request_count"`
+		ErrorCount        int64  `json:"error_count"`
+		RateLimitedCount  int64  `json:"rate_limited_count"`
+		AverageLatencyMS  int64  `json:"average_latency_ms"`
+		UserLimit         int    `json:"user_requests_per_minute"`
+		APIKeyLimit       int    `json:"api_key_requests_per_minute"`
+		InputTokens       int64  `json:"input_tokens"`
+		OutputTokens      int64  `json:"output_tokens"`
+		MonthlyTokens     int64  `json:"monthly_tokens"`
+		MonthlyTokenQuota int64  `json:"monthly_token_quota"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
 		t.Fatal(err)
 	}
-	if repository.userID != "user-id" || result.Provider != "test-provider" || result.Window != "24h" || result.RequestCount != 12 || result.ErrorCount != 2 || result.RateLimitedCount != 1 || result.AverageLatencyMS != 340 || result.UserLimit != 60 || result.APIKeyLimit != 30 {
+	if repository.userID != "user-id" || result.Provider != "test-provider" || result.Window != "24h" || result.RequestCount != 12 || result.ErrorCount != 2 || result.RateLimitedCount != 1 || result.AverageLatencyMS != 340 || result.UserLimit != 60 || result.APIKeyLimit != 30 || result.InputTokens != 100 || result.OutputTokens != 40 || result.MonthlyTokens != 200 || result.MonthlyTokenQuota != 1000 {
 		t.Fatalf("unexpected summary: %#v", result)
 	}
 }

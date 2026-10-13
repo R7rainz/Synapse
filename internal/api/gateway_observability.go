@@ -31,23 +31,31 @@ func (h *Handler) handleGatewaySummary(w http.ResponseWriter, r *http.Request, u
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
-		Provider         string `json:"provider"`
-		Window           string `json:"window"`
-		RequestCount     int64  `json:"request_count"`
-		ErrorCount       int64  `json:"error_count"`
-		RateLimitedCount int64  `json:"rate_limited_count"`
-		AverageLatencyMS int64  `json:"average_latency_ms"`
-		UserLimit        int    `json:"user_requests_per_minute"`
-		APIKeyLimit      int    `json:"api_key_requests_per_minute"`
+		Provider          string `json:"provider"`
+		Window            string `json:"window"`
+		RequestCount      int64  `json:"request_count"`
+		ErrorCount        int64  `json:"error_count"`
+		RateLimitedCount  int64  `json:"rate_limited_count"`
+		AverageLatencyMS  int64  `json:"average_latency_ms"`
+		UserLimit         int    `json:"user_requests_per_minute"`
+		APIKeyLimit       int    `json:"api_key_requests_per_minute"`
+		InputTokens       int64  `json:"input_tokens"`
+		OutputTokens      int64  `json:"output_tokens"`
+		MonthlyTokens     int64  `json:"monthly_tokens"`
+		MonthlyTokenQuota int64  `json:"monthly_token_quota"`
 	}{
-		Provider:         h.provider,
-		Window:           "24h",
-		RequestCount:     summary.RequestCount,
-		ErrorCount:       summary.ErrorCount,
-		RateLimitedCount: summary.RateLimitedCount,
-		AverageLatencyMS: summary.AverageLatencyMS,
-		UserLimit:        h.userRequestsPerMinute,
-		APIKeyLimit:      h.apiKeyRequestsPerMinute,
+		Provider:          h.provider,
+		Window:            "24h",
+		RequestCount:      summary.RequestCount,
+		ErrorCount:        summary.ErrorCount,
+		RateLimitedCount:  summary.RateLimitedCount,
+		AverageLatencyMS:  summary.AverageLatencyMS,
+		UserLimit:         h.userRequestsPerMinute,
+		APIKeyLimit:       h.apiKeyRequestsPerMinute,
+		InputTokens:       summary.InputTokens,
+		OutputTokens:      summary.OutputTokens,
+		MonthlyTokens:     summary.MonthlyTokens,
+		MonthlyTokenQuota: h.userTokensPerMonth,
 	})
 }
 
