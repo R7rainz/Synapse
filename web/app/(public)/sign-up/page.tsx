@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { PasswordField } from "@/components/password-field";
 
 export default function SignUp() {
   const router = useRouter();
@@ -73,10 +74,7 @@ export default function SignUp() {
               Email address
               <input className="h-12 border border-line-strong bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-brand" name="email" type="email" autoComplete="email" placeholder="you@company.com" required />
             </label>
-            <label className="grid gap-2 text-sm font-medium text-soft">
-              Password
-              <input className="h-12 border border-line-strong bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-brand" name="password" type="password" minLength={8} maxLength={72} autoComplete="new-password" placeholder="At least 8 characters" required />
-            </label>
+            <PasswordField id="sign-up-password" label="Password" name="password" minLength={8} maxLength={72} autoComplete="new-password" placeholder="At least 8 characters" showStrength />
             {error && <p className="m-0 border-l-2 border-danger bg-danger/5 px-3 py-2.5 text-sm text-danger" role="alert">{error}</p>}
             <button className="mt-1 h-12 border border-brand bg-brand px-4 text-sm font-semibold text-canvas transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50" disabled={pending}>
               {pending ? "Creating account…" : "Create account"}

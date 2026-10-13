@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { PasswordField } from "@/components/password-field";
 
 export default function SignIn() {
   const router = useRouter();
@@ -64,10 +65,7 @@ export default function SignIn() {
               Email address
               <input className="h-12 border border-line-strong bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-brand" name="email" type="email" autoComplete="email" placeholder="you@company.com" required />
             </label>
-            <label className="grid gap-2 text-sm font-medium text-soft">
-              Password
-              <input className="h-12 border border-line-strong bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-brand" name="password" type="password" autoComplete="current-password" placeholder="Enter your password" required />
-            </label>
+            <PasswordField id="sign-in-password" label="Password" name="password" autoComplete="current-password" placeholder="Enter your password" />
             {error && <p className="m-0 border-l-2 border-danger bg-danger/5 px-3 py-2.5 text-sm text-danger" role="alert">{error}</p>}
             <button className="mt-1 h-12 border border-brand bg-brand px-4 text-sm font-semibold text-canvas transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50" disabled={pending}>
               {pending ? "Signing in…" : "Sign in"}
