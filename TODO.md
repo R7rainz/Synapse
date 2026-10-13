@@ -47,10 +47,10 @@
 - [ ] Configure the provider and keep provider credentials server-side.
 - [ ] Map provider failures to stable gateway responses.
 - [ ] Add streaming responses if the frontend needs them.
-- [ ] Record provider, model, status, latency, and token usage reliably.
-- [ ] Add gateway unit and integration tests without making paid provider calls.
+- [x] Record provider, model, status, latency, and token usage reliably.
+- [x] Add gateway unit and integration tests without making paid provider calls.
 - [x] Add fixed-window request rate limits for users and API keys before exposing the gateway publicly.
-- [ ] Add token quotas and usage-based limits.
+- [x] Add soft monthly token quotas and usage-based limits.
 - [x] Add a frontend chat-completion flow using the Synapse API key.
 
 ## 5. Build the vector/RAG layer after the gateway
