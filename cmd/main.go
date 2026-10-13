@@ -50,6 +50,10 @@ func main() {
 		documents,
 		cfg.LLMProvider,
 		cfg.LLMEmbeddingModel,
+		api.GatewayPolicyConfig{
+			AllowedModels:   cfg.GatewayAllowedModels,
+			MaxOutputTokens: cfg.GatewayMaxOutputTokens,
+		},
 		api.RateLimitConfig{
 			UserRequestsPerMinute:   cfg.GatewayUserRequestsPerMinute,
 			APIKeyRequestsPerMinute: cfg.GatewayAPIKeyRequestsPerMinute,

@@ -32,10 +32,12 @@ const (
 var errInlineFilesTooLarge = errors.New("inline files exceed 15 MB")
 
 type ChatCompletionInput struct {
-	Model       string        `json:"model"`
-	Messages    []ChatMessage `json:"messages"`
-	DocumentIDs []string      `json:"document_ids,omitempty"`
-	Stream      bool          `json:"stream,omitempty"`
+	Model               string          `json:"model"`
+	Messages            []ChatMessage   `json:"messages"`
+	DocumentIDs         []string        `json:"document_ids,omitempty"`
+	Stream              bool            `json:"stream,omitempty"`
+	MaxTokens           json.RawMessage `json:"max_tokens,omitempty"`
+	MaxCompletionTokens json.RawMessage `json:"max_completion_tokens,omitempty"`
 }
 
 type ChatMessage struct {
@@ -97,8 +99,14 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 		writeChatError(w, http.StatusBadRequest, "A valid model is required", "invalid_model")
 		return
 	}
-	if len(input.Messages) == 0 {
-		writeChatError(w, http.StatusBadRequest, "At least one message is required", "invalid_messages")
+	if len(h.allowedModels) > 0 {
+		if _, ok := h.allowedModels[input.Model]; !ok {
+			writeChatError(w, http.StatusBadRequest, "Model is not allowed", "model_not_allowed")
+			return
+		}
+	}
+	if len(input.Messages) == 0 || len(input.Messages) > 100 {
+		writeChatError(w, http.StatusBadRequest, "Messages must contain between 1 and 100 items", "invalid_messages")
 		return
 	}
 	if err := validateChatMessages(input.Messages); err != nil {
@@ -110,6 +118,13 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 		}
 		writeChatError(w, status, err.Error(), code)
 		return
+	}
+	if h.maxOutputTokens > 0 {
+		body, err = applyOutputTokenLimit(body, input.MaxTokens, input.MaxCompletionTokens, h.maxOutputTokens)
+		if err != nil {
+			writeChatError(w, http.StatusBadRequest, err.Error(), "invalid_output_tokens")
+			return
+		}
 	}
 
 	rateLimit, err := h.consumeChatRateLimits(r.Context(), userID, apiKeyID)
@@ -321,8 +336,10 @@ func (w flushingWriter) Write(p []byte) (int, error) {
 func validateChatMessages(messages []ChatMessage) error {
 	totalFileBytes := int64(0)
 	for _, message := range messages {
-		if strings.TrimSpace(message.Role) == "" {
-			return fmt.Errorf("every message requires a role")
+		switch message.Role {
+		case "system", "developer", "user", "assistant", "tool":
+		default:
+			return fmt.Errorf("message role must be system, developer, user, assistant, or tool")
 		}
 
 		var text string
@@ -359,6 +376,52 @@ func validateChatMessages(messages []ChatMessage) error {
 		}
 	}
 	return nil
+}
+
+func applyOutputTokenLimit(body []byte, maxTokens, maxCompletionTokens json.RawMessage, limit int) ([]byte, error) {
+	hasLegacy, err := validateOutputTokenLimit(maxTokens, limit)
+	if err != nil {
+		return nil, fmt.Errorf("max_tokens %w", err)
+	}
+	hasCompletion, err := validateOutputTokenLimit(maxCompletionTokens, limit)
+	if err != nil {
+		return nil, fmt.Errorf("max_completion_tokens %w", err)
+	}
+	if hasLegacy && hasCompletion {
+		return nil, fmt.Errorf("max_tokens and max_completion_tokens cannot both be set")
+	}
+
+	var request map[string]json.RawMessage
+	if err := json.Unmarshal(body, &request); err != nil {
+		return nil, err
+	}
+	if !hasLegacy {
+		delete(request, "max_tokens")
+	}
+	if !hasCompletion {
+		delete(request, "max_completion_tokens")
+	}
+	if !hasLegacy && !hasCompletion {
+		request["max_completion_tokens"], err = json.Marshal(limit)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(request)
+}
+
+func validateOutputTokenLimit(raw json.RawMessage, limit int) (bool, error) {
+	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
+		return false, nil
+	}
+	var value int
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return false, fmt.Errorf("must be an integer")
+	}
+	if value < 1 || value > limit {
+		return false, fmt.Errorf("must be between 1 and %d", limit)
+	}
+	return true, nil
 }
 
 func validateFileData(value string, remaining int64) (int64, error) {

@@ -132,6 +132,101 @@ func TestChatSanitizesUpstreamErrorAndPreservesSafeHeaders(t *testing.T) {
 	}
 }
 
+func TestChatValidatesGatewayPolicy(t *testing.T) {
+	manyMessages := make([]map[string]string, 101)
+	for i := range manyMessages {
+		manyMessages[i] = map[string]string{"role": "user", "content": "hello"}
+	}
+	manyMessagesBody, err := json.Marshal(map[string]any{"model": "test", "messages": manyMessages})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		body string
+		code string
+	}{
+		{name: "model", body: `{"model":"blocked","messages":[{"role":"user","content":"hello"}]}`, code: "model_not_allowed"},
+		{name: "message count", body: string(manyMessagesBody), code: "invalid_messages"},
+		{name: "role", body: `{"model":"test","messages":[{"role":"unknown","content":"hello"}]}`, code: "invalid_messages"},
+		{name: "both token fields", body: `{"model":"test","max_tokens":10,"max_completion_tokens":10,"messages":[{"role":"user","content":"hello"}]}`, code: "invalid_output_tokens"},
+		{name: "token cap", body: `{"model":"test","max_completion_tokens":4097,"messages":[{"role":"user","content":"hello"}]}`, code: "invalid_output_tokens"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			handler := &Handler{
+				allowedModels:   map[string]struct{}{"test": {}},
+				maxOutputTokens: 4096,
+			}
+			request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(test.body))
+			response := httptest.NewRecorder()
+
+			handler.handleChatCompletions(response, request, "user-id", nil)
+
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), test.code) {
+				t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestChatInjectsDefaultOutputTokenLimit(t *testing.T) {
+	var outputLimit int
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(body["max_completion_tokens"], &outputLimit); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"choices":[]}`))
+	}))
+	defer provider.Close()
+
+	handler := &Handler{
+		gateway:         gateway.NewClient(provider.URL, ""),
+		allowedModels:   map[string]struct{}{"test": {}},
+		maxOutputTokens: 4096,
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`))
+	response := httptest.NewRecorder()
+
+	handler.handleChatCompletions(response, request, "user-id", nil)
+
+	if response.Code != http.StatusOK || outputLimit != 4096 {
+		t.Fatalf("status = %d, output limit = %d, body = %s", response.Code, outputLimit, response.Body.String())
+	}
+}
+
+func TestProviderFailureMapsStableErrors(t *testing.T) {
+	tests := []struct {
+		status   int
+		code     string
+		wantHTTP int
+		wantCode string
+	}{
+		{status: http.StatusBadRequest, wantHTTP: http.StatusBadRequest, wantCode: "provider_request_invalid"},
+		{status: http.StatusUnauthorized, wantHTTP: http.StatusBadGateway, wantCode: "provider_auth_failed"},
+		{status: http.StatusTooManyRequests, wantHTTP: http.StatusTooManyRequests, wantCode: "provider_rate_limited"},
+		{status: http.StatusTooManyRequests, code: "credit_balance_exhausted", wantHTTP: http.StatusServiceUnavailable, wantCode: "provider_quota_exceeded"},
+		{status: http.StatusGatewayTimeout, wantHTTP: http.StatusGatewayTimeout, wantCode: "provider_timeout"},
+		{status: http.StatusServiceUnavailable, wantHTTP: http.StatusServiceUnavailable, wantCode: "provider_unavailable"},
+		{status: http.StatusTeapot, wantHTTP: http.StatusBadGateway, wantCode: "provider_error"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.wantCode, func(t *testing.T) {
+			status, _, code, _ := providerFailure(&gateway.ProviderError{StatusCode: test.status, Code: test.code})
+			if status != test.wantHTTP || code != test.wantCode {
+				t.Fatalf("status = %d, code = %q", status, code)
+			}
+		})
+	}
+}
+
 func TestChatStreamsAndFlushes(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
