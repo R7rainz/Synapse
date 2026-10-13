@@ -104,13 +104,14 @@ func TestPlaygroundChatRecordsRequestWithoutAPIKey(t *testing.T) {
 	}
 }
 
-func TestChatPreservesUpstreamErrorAndHeaders(t *testing.T) {
+func TestChatSanitizesUpstreamErrorAndPreservesSafeHeaders(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Retry-After", "30")
 		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-Request-ID", "request-123")
 		w.WriteHeader(http.StatusTooManyRequests)
-		_, _ = w.Write([]byte(`{"error":{"message":"slow down"}}`))
+		_, _ = w.Write([]byte(`{"error":{"message":"private provider details","type":"rate_limit_error","code":"slow_down"}}`))
 	}))
 	defer provider.Close()
 
@@ -123,10 +124,10 @@ func TestChatPreservesUpstreamErrorAndHeaders(t *testing.T) {
 
 	handler.handleChatCompletions(response, request, "user-id", nil)
 
-	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") != "30" || response.Header().Get("X-RateLimit-Remaining") != "0" {
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") != "30" || response.Header().Get("X-RateLimit-Remaining") != "0" || response.Header().Get("X-Request-ID") != "request-123" {
 		t.Fatalf("status = %d, headers = %#v", response.Code, response.Header())
 	}
-	if !strings.Contains(response.Body.String(), "slow down") {
+	if !strings.Contains(response.Body.String(), "provider_rate_limited") || strings.Contains(response.Body.String(), "private provider details") {
 		t.Fatalf("unexpected body: %s", response.Body.String())
 	}
 }

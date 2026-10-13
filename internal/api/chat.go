@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -162,7 +163,9 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 
 		embeddings, err := h.gateway.Embeddings(r.Context(), h.embeddingModel, []string{query})
 		if err != nil {
-			writeChatError(w, http.StatusBadGateway, "Could not create query embedding", "embedding_provider_unavailable")
+			status, message, code, headers := providerFailure(err)
+			copyUpstreamHeaders(w.Header(), headers)
+			writeChatError(w, status, message, code)
 			return
 		}
 
@@ -193,16 +196,10 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 	}
 
 	startedAt := time.Now()
-	response, err := h.gateway.ChatCompletions(r.Context(), bytes.NewReader(body))
+	response, err := h.gateway.ChatCompletions(r.Context(), body, input.Stream)
 	if err != nil {
-		status := http.StatusBadGateway
-		message := "LLM provider unavailable"
-		code := "provider_unavailable"
-		if errors.Is(err, gateway.ErrNotConfigured) {
-			status = http.StatusServiceUnavailable
-			message = "LLM provider is not configured"
-			code = "provider_not_configured"
-		}
+		status, message, code, headers := providerFailure(err)
+		copyUpstreamHeaders(w.Header(), headers)
 		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, status, startedAt, false, gateway.Usage{})
 		writeChatError(w, status, message, code)
 		return
@@ -397,7 +394,9 @@ func validateFileData(value string, remaining int64) (int64, error) {
 
 func writeChatError(w http.ResponseWriter, status int, message, code string) {
 	errorType := "invalid_request_error"
-	if status >= http.StatusInternalServerError {
+	if status == http.StatusTooManyRequests {
+		errorType = "rate_limit_error"
+	} else if status >= http.StatusInternalServerError {
 		errorType = "api_error"
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -409,6 +408,43 @@ func writeChatError(w http.ResponseWriter, status int, message, code string) {
 			"code":    code,
 		},
 	})
+}
+
+func providerFailure(err error) (int, string, string, http.Header) {
+	if errors.Is(err, gateway.ErrNotConfigured) {
+		return http.StatusServiceUnavailable, "LLM provider is not configured", "provider_not_configured", nil
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return http.StatusGatewayTimeout, "LLM provider timed out", "provider_timeout", nil
+	}
+	var networkErr net.Error
+	if errors.As(err, &networkErr) && networkErr.Timeout() {
+		return http.StatusGatewayTimeout, "LLM provider timed out", "provider_timeout", nil
+	}
+
+	var providerErr *gateway.ProviderError
+	if !errors.As(err, &providerErr) {
+		return http.StatusServiceUnavailable, "LLM provider unavailable", "provider_unavailable", nil
+	}
+	log.Printf("LLM provider request failed: status=%d code=%q request_id=%q", providerErr.StatusCode, providerErr.Code, providerErr.RequestID)
+
+	if providerErr.StatusCode == http.StatusTooManyRequests && providerErr.IsQuotaExceeded() {
+		return http.StatusServiceUnavailable, "LLM provider quota exceeded", "provider_quota_exceeded", providerErr.Header
+	}
+	switch providerErr.StatusCode {
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity:
+		return http.StatusBadRequest, "LLM provider rejected the request", "provider_request_invalid", providerErr.Header
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return http.StatusBadGateway, "LLM provider authentication failed", "provider_auth_failed", providerErr.Header
+	case http.StatusTooManyRequests:
+		return http.StatusTooManyRequests, "LLM provider rate limit exceeded", "provider_rate_limited", providerErr.Header
+	case http.StatusGatewayTimeout:
+		return http.StatusGatewayTimeout, "LLM provider timed out", "provider_timeout", providerErr.Header
+	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable:
+		return http.StatusServiceUnavailable, "LLM provider unavailable", "provider_unavailable", providerErr.Header
+	default:
+		return http.StatusBadGateway, "LLM provider request failed", "provider_error", providerErr.Header
+	}
 }
 
 func copyUpstreamHeaders(destination, source http.Header) {

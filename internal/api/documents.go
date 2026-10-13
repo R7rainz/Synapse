@@ -50,7 +50,9 @@ func (h *Handler) HandleCreateDocument(w http.ResponseWriter, r *http.Request) {
 	contents := document.ChunkText(content)
 	embeddings, err := h.gateway.Embeddings(r.Context(), h.embeddingModel, contents)
 	if err != nil {
-		http.Error(w, "Could not create document embeddings", http.StatusBadGateway)
+		status, message, code, headers := providerFailure(err)
+		copyUpstreamHeaders(w.Header(), headers)
+		writeChatError(w, status, message, code)
 		return
 	}
 
