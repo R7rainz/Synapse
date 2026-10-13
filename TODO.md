@@ -43,9 +43,9 @@
 
 ## 4. Complete the LLM gateway
 
-- [ ] Validate chat-completion request fields and supported models.
+- [x] Validate chat-completion request fields and supported models.
 - [ ] Configure the provider and keep provider credentials server-side.
-- [ ] Map provider failures to stable gateway responses.
+- [x] Map provider failures to stable gateway responses.
 - [ ] Add streaming responses if the frontend needs them.
 - [x] Record provider, model, status, latency, and token usage reliably.
 - [x] Add gateway unit and integration tests without making paid provider calls.
