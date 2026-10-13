@@ -27,11 +27,21 @@ type RateLimitResult struct {
 	ResetAt   time.Time
 }
 
+type TokenQuotaResult struct {
+	Allowed   bool
+	Used      int64
+	Remaining int64
+	ResetAt   time.Time
+}
+
 type Summary struct {
 	RequestCount     int64 `json:"request_count"`
 	ErrorCount       int64 `json:"error_count"`
 	RateLimitedCount int64 `json:"rate_limited_count"`
 	AverageLatencyMS int64 `json:"average_latency_ms"`
+	InputTokens      int64 `json:"input_tokens"`
+	OutputTokens     int64 `json:"output_tokens"`
+	MonthlyTokens    int64 `json:"monthly_tokens"`
 }
 
 type RequestRecord struct {

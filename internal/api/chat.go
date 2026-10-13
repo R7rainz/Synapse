@@ -25,6 +25,7 @@ import (
 const (
 	maxChatBodySize       = 20 << 20
 	maxInlineFileDataSize = 15_000_000
+	maxUsageCaptureSize   = 32 << 20
 )
 
 var errInlineFilesTooLarge = errors.New("inline files exceed 15 MB")
@@ -112,15 +113,29 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 
 	rateLimit, err := h.consumeChatRateLimits(r.Context(), userID, apiKeyID)
 	if err != nil {
-		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusServiceUnavailable, time.Now(), false)
+		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusServiceUnavailable, time.Now(), false, gateway.Usage{})
 		writeChatError(w, http.StatusServiceUnavailable, "Rate limiting is unavailable", "rate_limit_unavailable")
 		return
 	}
 	if rateLimit != nil && !rateLimit.Allowed {
 		retryAfter := rateLimitRetryAfter(rateLimit.ResetAt)
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
-		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusTooManyRequests, time.Now(), true)
+		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusTooManyRequests, time.Now(), true, gateway.Usage{})
 		writeChatError(w, http.StatusTooManyRequests, "Rate limit exceeded", "rate_limit_exceeded")
+		return
+	}
+
+	tokenQuota, err := h.consumeChatTokenQuotas(r.Context(), userID, apiKeyID)
+	if err != nil {
+		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusServiceUnavailable, time.Now(), false, gateway.Usage{})
+		writeChatError(w, http.StatusServiceUnavailable, "Token quota is unavailable", "quota_unavailable")
+		return
+	}
+	if tokenQuota != nil && !tokenQuota.Allowed {
+		retryAfter := rateLimitRetryAfter(tokenQuota.ResetAt)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusTooManyRequests, time.Now(), false, gateway.Usage{})
+		writeChatError(w, http.StatusTooManyRequests, "Monthly token quota exceeded", "quota_exceeded")
 		return
 	}
 
@@ -169,6 +184,13 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 	}
+	if input.Stream {
+		body, err = enableStreamingUsage(body)
+		if err != nil {
+			writeChatError(w, http.StatusInternalServerError, "Could not prepare streaming request", "request_preparation_failed")
+			return
+		}
+	}
 
 	startedAt := time.Now()
 	response, err := h.gateway.ChatCompletions(r.Context(), bytes.NewReader(body))
@@ -181,7 +203,7 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 			message = "LLM provider is not configured"
 			code = "provider_not_configured"
 		}
-		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, status, startedAt, false)
+		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, status, startedAt, false, gateway.Usage{})
 		writeChatError(w, status, message, code)
 		return
 	}
@@ -194,17 +216,18 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 		var ok bool
 		flusher, ok = w.(http.Flusher)
 		if !ok {
-			h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusInternalServerError, startedAt, false)
+			h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, http.StatusInternalServerError, startedAt, false, gateway.Usage{})
 			writeChatError(w, http.StatusInternalServerError, "Streaming is not supported by this server", "streaming_unavailable")
 			return
 		}
 	}
 
 	w.WriteHeader(response.StatusCode)
-	if _, err := io.Copy(flushingWriter{Writer: w, Flusher: flusher}, response.Body); err != nil {
-		log.Printf("failed to copy LLM response: %v", err)
+	usage, copyErr := copyChatResponse(w, response.Body, input.Stream, flusher)
+	if copyErr != nil {
+		log.Printf("failed to copy LLM response: %v", copyErr)
 	}
-	h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, response.StatusCode, startedAt, false)
+	h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, response.StatusCode, startedAt, false, usage)
 }
 
 func (h *Handler) consumeChatRateLimits(ctx context.Context, userID string, apiKeyID *string) (*llmrequest.RateLimitResult, error) {
@@ -232,6 +255,40 @@ func (h *Handler) consumeChatRateLimits(ctx context.Context, userID string, apiK
 	}
 	if result == nil {
 		return nil, errors.New("rate limiter returned an empty result")
+	}
+	if !result.Allowed {
+		return result, nil
+	}
+	return nil, nil
+}
+
+func (h *Handler) consumeChatTokenQuotas(ctx context.Context, userID string, apiKeyID *string) (*llmrequest.TokenQuotaResult, error) {
+	if h.llmrequest == nil || (h.userTokensPerMonth < 1 && (apiKeyID == nil || h.apiKeyTokensPerMonth < 1)) {
+		return nil, nil
+	}
+
+	if h.userTokensPerMonth > 0 {
+		result, err := h.llmrequest.CheckMonthlyTokenQuota(ctx, llmrequest.RateLimitScopeUser, userID, h.userTokensPerMonth)
+		if err != nil {
+			return nil, err
+		}
+		if result == nil {
+			return nil, errors.New("token quota returned an empty result")
+		}
+		if !result.Allowed {
+			return result, nil
+		}
+	}
+	if apiKeyID == nil || h.apiKeyTokensPerMonth < 1 {
+		return nil, nil
+	}
+
+	result, err := h.llmrequest.CheckMonthlyTokenQuota(ctx, llmrequest.RateLimitScopeAPIKey, *apiKeyID, h.apiKeyTokensPerMonth)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, errors.New("token quota returned an empty result")
 	}
 	if !result.Allowed {
 		return result, nil
@@ -370,21 +427,64 @@ func copyUpstreamHeaders(destination, source http.Header) {
 	}
 }
 
-func (h *Handler) recordLLMRequest(ctx context.Context, userID string, apiKeyID *string, model string, statusCode int, startedAt time.Time, rateLimited bool) {
+func (h *Handler) recordLLMRequest(ctx context.Context, userID string, apiKeyID *string, model string, statusCode int, startedAt time.Time, rateLimited bool, usage gateway.Usage) {
+	if h.llmrequest == nil {
+		return
+	}
 	logContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 	defer cancel()
 	request := &llmrequest.LLMRequest{
-		UserID:      userID,
-		APIKeyID:    apiKeyID,
-		Provider:    h.provider,
-		Model:       model,
-		StatusCode:  statusCode,
-		LatencyMS:   int(time.Since(startedAt).Milliseconds()),
-		RateLimited: rateLimited,
+		UserID:       userID,
+		APIKeyID:     apiKeyID,
+		Provider:     h.provider,
+		Model:        model,
+		StatusCode:   statusCode,
+		LatencyMS:    int(time.Since(startedAt).Milliseconds()),
+		InputTokens:  usage.InputTokens,
+		OutputTokens: usage.OutputTokens,
+		RateLimited:  rateLimited,
 	}
 	if err := h.llmrequest.CreateLLMRequest(logContext, request); err != nil {
 		log.Printf("failed to record LLM request: %v", err)
 	}
+}
+
+func copyChatResponse(w http.ResponseWriter, body io.Reader, stream bool, flusher http.Flusher) (gateway.Usage, error) {
+	if stream {
+		parser := gateway.NewStreamUsageParser()
+		_, err := io.Copy(io.MultiWriter(flushingWriter{Writer: w, Flusher: flusher}, parser), body)
+		parser.Finalize()
+		usage, _ := parser.Usage()
+		return usage, err
+	}
+
+	capture := &usageCapture{limit: maxUsageCaptureSize}
+	_, err := io.Copy(io.MultiWriter(w, capture), body)
+	if err != nil || capture.truncated {
+		return gateway.Usage{}, err
+	}
+	usage, _ := gateway.ParseUsage(capture.Bytes())
+	return usage, nil
+}
+
+type usageCapture struct {
+	bytes.Buffer
+	limit     int
+	truncated bool
+}
+
+func (c *usageCapture) Write(data []byte) (int, error) {
+	if c.truncated {
+		return len(data), nil
+	}
+	remaining := c.limit - c.Len()
+	if len(data) > remaining {
+		_, _ = c.Buffer.Write(data[:remaining])
+		c.truncated = true
+		return len(data), nil
+	}
+	_, _ = c.Buffer.Write(data)
+	return len(data), nil
 }
 
 func normalizeDocumentIDs(ids []string) ([]string, error) {
@@ -481,5 +581,32 @@ func removeDocumentIDs(body []byte) ([]byte, error) {
 		return nil, err
 	}
 	delete(request, "document_ids")
+	return json.Marshal(request)
+}
+
+func enableStreamingUsage(body []byte) ([]byte, error) {
+	var request map[string]json.RawMessage
+	if err := json.Unmarshal(body, &request); err != nil {
+		return nil, err
+	}
+
+	streamOptions := make(map[string]json.RawMessage)
+	if raw, ok := request["stream_options"]; ok {
+		if err := json.Unmarshal(raw, &streamOptions); err != nil {
+			return nil, err
+		}
+		if streamOptions == nil {
+			streamOptions = make(map[string]json.RawMessage)
+		}
+	}
+	includeUsage, err := json.Marshal(true)
+	if err != nil {
+		return nil, err
+	}
+	streamOptions["include_usage"] = includeUsage
+	request["stream_options"], err = json.Marshal(streamOptions)
+	if err != nil {
+		return nil, err
+	}
 	return json.Marshal(request)
 }

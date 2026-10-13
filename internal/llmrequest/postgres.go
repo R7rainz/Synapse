@@ -46,17 +46,54 @@ func (r *PostgresRepository) ConsumeRateLimit(ctx context.Context, scope, scopeI
 	return result, nil
 }
 
+func (r *PostgresRepository) CheckMonthlyTokenQuota(ctx context.Context, scope, scopeID string, limit int64) (*TokenQuotaResult, error) {
+	query := `
+		SELECT
+			COALESCE(SUM(input_tokens::bigint + output_tokens::bigint), 0),
+			date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC' + interval '1 month'
+		FROM llm_requests
+		WHERE user_id = $1
+			AND created_at >= date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC'
+	`
+	if scope == RateLimitScopeAPIKey {
+		query = `
+			SELECT
+				COALESCE(SUM(input_tokens::bigint + output_tokens::bigint), 0),
+				date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC' + interval '1 month'
+			FROM llm_requests
+			WHERE api_key_id = $1
+				AND created_at >= date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC'
+		`
+	}
+
+	result := &TokenQuotaResult{}
+	if err := r.pool.QueryRow(ctx, query, scopeID).Scan(&result.Used, &result.ResetAt); err != nil {
+		return nil, err
+	}
+	result.Allowed = limit < 1 || result.Used < limit
+	if limit > 0 {
+		result.Remaining = limit - result.Used
+		if result.Remaining < 0 {
+			result.Remaining = 0
+		}
+	}
+	return result, nil
+}
+
 func (r *PostgresRepository) SummaryByUser(ctx context.Context, userID string) (*Summary, error) {
 	summary := &Summary{}
 	err := r.pool.QueryRow(ctx, `
 		SELECT
-			COUNT(*),
-			COUNT(*) FILTER (WHERE status_code < 200 OR status_code >= 300),
-			COUNT(*) FILTER (WHERE rate_limited),
-			COALESCE(ROUND(AVG(latency_ms)), 0)::bigint
+			COUNT(*) FILTER (WHERE created_at >= now() - interval '24 hours'),
+			COUNT(*) FILTER (WHERE created_at >= now() - interval '24 hours' AND (status_code < 200 OR status_code >= 300)),
+			COUNT(*) FILTER (WHERE created_at >= now() - interval '24 hours' AND rate_limited),
+			COALESCE(ROUND(AVG(latency_ms) FILTER (WHERE created_at >= now() - interval '24 hours')), 0)::bigint,
+			COALESCE(SUM(input_tokens::bigint) FILTER (WHERE created_at >= now() - interval '24 hours'), 0),
+			COALESCE(SUM(output_tokens::bigint) FILTER (WHERE created_at >= now() - interval '24 hours'), 0),
+			COALESCE(SUM(input_tokens::bigint + output_tokens::bigint) FILTER (WHERE created_at >= date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC'), 0)
 		FROM llm_requests
-		WHERE user_id = $1 AND created_at >= now() - interval '24 hours'
-	`, userID).Scan(&summary.RequestCount, &summary.ErrorCount, &summary.RateLimitedCount, &summary.AverageLatencyMS)
+		WHERE user_id = $1
+	`, userID).Scan(&summary.RequestCount, &summary.ErrorCount, &summary.RateLimitedCount, &summary.AverageLatencyMS, &summary.InputTokens, &summary.OutputTokens, &summary.MonthlyTokens)
 	if err != nil {
 		return nil, err
 	}

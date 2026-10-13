@@ -16,14 +16,17 @@ import (
 )
 
 type recordingLLMRequests struct {
-	request         *llmrequest.LLMRequest
-	summary         *llmrequest.Summary
-	requests        []*llmrequest.RequestRecord
-	userID          string
-	limit           int
-	rateLimitResult *llmrequest.RateLimitResult
-	rateLimitError  error
-	rateLimitScopes []string
+	request          *llmrequest.LLMRequest
+	summary          *llmrequest.Summary
+	requests         []*llmrequest.RequestRecord
+	userID           string
+	limit            int
+	rateLimitResult  *llmrequest.RateLimitResult
+	rateLimitError   error
+	rateLimitScopes  []string
+	tokenQuotaResult *llmrequest.TokenQuotaResult
+	tokenQuotaError  error
+	tokenQuotaScopes []string
 }
 
 func (r *recordingLLMRequests) CreateLLMRequest(_ context.Context, request *llmrequest.LLMRequest) error {
@@ -40,6 +43,17 @@ func (r *recordingLLMRequests) ConsumeRateLimit(_ context.Context, scope, scopeI
 		return r.rateLimitResult, nil
 	}
 	return &llmrequest.RateLimitResult{Allowed: true}, nil
+}
+
+func (r *recordingLLMRequests) CheckMonthlyTokenQuota(_ context.Context, scope, scopeID string, _ int64) (*llmrequest.TokenQuotaResult, error) {
+	r.tokenQuotaScopes = append(r.tokenQuotaScopes, scope+":"+scopeID)
+	if r.tokenQuotaError != nil {
+		return nil, r.tokenQuotaError
+	}
+	if r.tokenQuotaResult != nil {
+		return r.tokenQuotaResult, nil
+	}
+	return &llmrequest.TokenQuotaResult{Allowed: true}, nil
 }
 
 func (r *recordingLLMRequests) SummaryByUser(_ context.Context, userID string) (*llmrequest.Summary, error) {
@@ -67,7 +81,7 @@ func TestPlaygroundChatRequiresClaims(t *testing.T) {
 func TestPlaygroundChatRecordsRequestWithoutAPIKey(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hello"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hello"}}],"usage":{"prompt_tokens":5,"completion_tokens":2}}`))
 	}))
 	defer provider.Close()
 
@@ -85,7 +99,7 @@ func TestPlaygroundChatRecordsRequestWithoutAPIKey(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
-	if requests.request == nil || requests.request.UserID != "user-id" || requests.request.APIKeyID != nil {
+	if requests.request == nil || requests.request.UserID != "user-id" || requests.request.APIKeyID != nil || requests.request.InputTokens != 5 || requests.request.OutputTokens != 2 {
 		t.Fatalf("unexpected request log: %#v", requests.request)
 	}
 }
@@ -122,13 +136,15 @@ func TestChatStreamsAndFlushes(t *testing.T) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write([]byte("data: one\n\n"))
+		_, _ = w.Write([]byte("data: {\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":4}}\n\n"))
 		_, _ = w.Write([]byte("data: [DONE]\n\n"))
 	}))
 	defer provider.Close()
 
+	requests := &recordingLLMRequests{}
 	handler := &Handler{
 		gateway:    gateway.NewClient(provider.URL, ""),
-		llmrequest: &recordingLLMRequests{},
+		llmrequest: requests,
 	}
 	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"test","stream":true,"messages":[{"role":"user","content":"hello"}]}`))
 	response := httptest.NewRecorder()
@@ -140,6 +156,9 @@ func TestChatStreamsAndFlushes(t *testing.T) {
 	}
 	if response.Header().Get("Content-Type") != "text/event-stream" || !strings.Contains(response.Body.String(), "[DONE]") {
 		t.Fatalf("headers = %#v, body = %q", response.Header(), response.Body.String())
+	}
+	if requests.request == nil || requests.request.InputTokens != 8 || requests.request.OutputTokens != 4 {
+		t.Fatalf("unexpected usage: %#v", requests.request)
 	}
 }
 
@@ -199,6 +218,64 @@ func TestChatConsumesUserAndAPIKeyLimits(t *testing.T) {
 	}
 	if strings.Join(repository.rateLimitScopes, ",") != "user:user-id,api_key:key-id" {
 		t.Fatalf("scopes = %#v", repository.rateLimitScopes)
+	}
+}
+
+func TestChatRejectsTokenQuota(t *testing.T) {
+	repository := &recordingLLMRequests{tokenQuotaResult: &llmrequest.TokenQuotaResult{
+		ResetAt: time.Now().Add(24 * time.Hour),
+	}}
+	handler := &Handler{
+		gateway:            gateway.NewClient("", ""),
+		llmrequest:         repository,
+		userTokensPerMonth: 100,
+	}
+	request := httptest.NewRequest(http.MethodPost, "/playground/chat/completions", strings.NewReader(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`))
+	response := httptest.NewRecorder()
+
+	handler.handleChatCompletions(response, request, "user-id", nil)
+
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") == "" {
+		t.Fatalf("status = %d, retry-after = %q", response.Code, response.Header().Get("Retry-After"))
+	}
+	if !strings.Contains(response.Body.String(), "quota_exceeded") {
+		t.Fatalf("unexpected body: %s", response.Body.String())
+	}
+	if repository.request == nil || repository.request.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("unexpected request log: %#v", repository.request)
+	}
+}
+
+func TestChatConsumesUserAndAPIKeyTokenQuotas(t *testing.T) {
+	repository := &recordingLLMRequests{}
+	handler := &Handler{
+		llmrequest:           repository,
+		userTokensPerMonth:   1000,
+		apiKeyTokensPerMonth: 500,
+	}
+	keyID := "key-id"
+
+	if _, err := handler.consumeChatTokenQuotas(context.Background(), "user-id", &keyID); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(repository.tokenQuotaScopes, ",") != "user:user-id,api_key:key-id" {
+		t.Fatalf("scopes = %#v", repository.tokenQuotaScopes)
+	}
+}
+
+func TestEnableStreamingUsage(t *testing.T) {
+	body, err := enableStreamingUsage([]byte(`{"model":"test","stream":true,"stream_options":{"foo":true}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var request struct {
+		StreamOptions map[string]bool `json:"stream_options"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil {
+		t.Fatal(err)
+	}
+	if !request.StreamOptions["include_usage"] || !request.StreamOptions["foo"] {
+		t.Fatalf("unexpected stream options: %#v", request.StreamOptions)
 	}
 }
 

@@ -18,11 +18,15 @@ type Handler struct {
 	embeddingModel          string
 	userRequestsPerMinute   int
 	apiKeyRequestsPerMinute int
+	userTokensPerMonth      int64
+	apiKeyTokensPerMonth    int64
 }
 
 type RateLimitConfig struct {
 	UserRequestsPerMinute   int
 	APIKeyRequestsPerMinute int
+	UserTokensPerMonth      int64
+	APIKeyTokensPerMonth    int64
 }
 
 func NewHandler(key apikey.Repository, verifier *auth.Verifier, gateway *gateway.Client, requests llmrequest.Repository, documents document.Repository, provider, embeddingModel string, limits RateLimitConfig) *Handler {
@@ -36,5 +40,7 @@ func NewHandler(key apikey.Repository, verifier *auth.Verifier, gateway *gateway
 		embeddingModel:          embeddingModel,
 		userRequestsPerMinute:   limits.UserRequestsPerMinute,
 		apiKeyRequestsPerMinute: limits.APIKeyRequestsPerMinute,
+		userTokensPerMonth:      limits.UserTokensPerMonth,
+		apiKeyTokensPerMonth:    limits.APIKeyTokensPerMonth,
 	}
 }

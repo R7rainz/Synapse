@@ -53,6 +53,8 @@ func main() {
 		api.RateLimitConfig{
 			UserRequestsPerMinute:   cfg.GatewayUserRequestsPerMinute,
 			APIKeyRequestsPerMinute: cfg.GatewayAPIKeyRequestsPerMinute,
+			UserTokensPerMonth:      cfg.GatewayUserTokensPerMonth,
+			APIKeyTokensPerMonth:    cfg.GatewayAPIKeyTokensPerMonth,
 		},
 	)
 
