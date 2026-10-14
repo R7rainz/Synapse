@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +28,17 @@ type recordingLLMRequests struct {
 	tokenQuotaResult *llmrequest.TokenQuotaResult
 	tokenQuotaError  error
 	tokenQuotaScopes []string
+}
+
+type cancelOnFlushRecorder struct {
+	*httptest.ResponseRecorder
+	cancel context.CancelFunc
+	once   sync.Once
+}
+
+func (r *cancelOnFlushRecorder) Flush() {
+	r.ResponseRecorder.Flush()
+	r.once.Do(r.cancel)
 }
 
 func (r *recordingLLMRequests) CreateLLMRequest(_ context.Context, request *llmrequest.LLMRequest) error {
@@ -255,6 +267,34 @@ func TestChatStreamsAndFlushes(t *testing.T) {
 	}
 	if requests.request == nil || requests.request.InputTokens != 8 || requests.request.OutputTokens != 4 {
 		t.Fatalf("unexpected usage: %#v", requests.request)
+	}
+}
+
+func TestChatRecordsCanceledStream(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n"))
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	defer provider.Close()
+
+	requests := &recordingLLMRequests{}
+	handler := &Handler{
+		gateway:    gateway.NewClient(provider.URL, ""),
+		llmrequest: requests,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"test","stream":true,"messages":[{"role":"user","content":"hello"}]}`)).WithContext(ctx)
+	response := &cancelOnFlushRecorder{ResponseRecorder: httptest.NewRecorder(), cancel: cancel}
+
+	handler.handleChatCompletions(response, request, "user-id", nil)
+
+	if requests.request == nil || requests.request.StatusCode != statusClientClosed {
+		t.Fatalf("unexpected request log: %#v", requests.request)
+	}
+	if !strings.Contains(response.Body.String(), "partial") {
+		t.Fatalf("partial response was not preserved: %q", response.Body.String())
 	}
 }
 

@@ -27,6 +27,7 @@ const (
 	maxChatBodySize       = 20 << 20
 	maxInlineFileDataSize = 15_000_000
 	maxUsageCaptureSize   = 32 << 20
+	statusClientClosed    = 499
 )
 
 var errInlineFilesTooLarge = errors.New("inline files exceed 15 MB")
@@ -239,7 +240,11 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 	if copyErr != nil {
 		log.Printf("failed to copy LLM response: %v", copyErr)
 	}
-	h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, response.StatusCode, startedAt, false, usage)
+	statusCode := response.StatusCode
+	if errors.Is(r.Context().Err(), context.Canceled) {
+		statusCode = statusClientClosed
+	}
+	h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, statusCode, startedAt, false, usage)
 }
 
 func (h *Handler) consumeChatRateLimits(ctx context.Context, userID string, apiKeyID *string) (*llmrequest.RateLimitResult, error) {
