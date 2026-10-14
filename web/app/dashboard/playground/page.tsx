@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
 import { apiFetch, readResponse } from "@/lib/api";
+import { readChatCompletionStream } from "@/lib/chat-stream";
 import type { UserDocument } from "@/lib/types";
 
 const maxInlineFileBytes = 15_000_000;
@@ -22,10 +23,6 @@ const fallbackMIMETypes: Record<string, string> = {
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
-};
-
-type ChatCompletionResponse = {
-  choices?: Array<{ message?: { content?: string } }>;
 };
 
 type GatewayContentBlock =
@@ -76,6 +73,7 @@ export default function PlaygroundPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const requestController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +93,8 @@ export default function PlaygroundPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => () => requestController.current?.abort(), []);
 
   function toggleDocument(id: string) {
     setSelectedDocumentIDs((current) => {
@@ -126,12 +126,18 @@ export default function PlaygroundPage() {
 
   async function sendChat(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (requestController.current) return;
+
     const content = prompt.trim();
     if (!content) return;
 
     const nextMessages = [...messages, { role: "user" as const, content }];
+    const controller = new AbortController();
+    requestController.current = controller;
     setPending(true);
     setError("");
+    let streamStarted = false;
+    let receivedContent = "";
 
     try {
       const fileBlocks = await Promise.all(
@@ -149,29 +155,44 @@ export default function PlaygroundPage() {
         body: JSON.stringify({
           model: model.trim(),
           messages: [...messages, { role: "user", content: requestContent }],
+          stream: true,
           ...(selectedDocumentIDs.length > 0 ? { document_ids: selectedDocumentIDs } : {}),
         }),
+        signal: controller.signal,
       });
-      const text = await response.text();
-      if (!response.ok) throw new Error(errorMessage(text, response.status));
+      if (!response.ok) throw new Error(errorMessage(await response.text(), response.status));
 
-      let upstreamMessage = text;
-      try {
-        const result = JSON.parse(text) as ChatCompletionResponse;
-        upstreamMessage = result.choices?.[0]?.message?.content ?? "";
-      } catch {
-        // Some compatible upstreams return plain text.
-      }
-      if (!upstreamMessage.trim()) throw new Error("The upstream provider returned no message");
-
-      setMessages([...nextMessages, { role: "assistant", content: upstreamMessage }]);
+      streamStarted = true;
+      setMessages([...nextMessages, { role: "assistant", content: "" }]);
       setPrompt("");
       setFiles([]);
+      const upstreamMessage = await readChatCompletionStream(response.body, (delta) => {
+        receivedContent += delta;
+        setMessages((current) => {
+          const assistant = current.at(-1);
+          if (assistant?.role !== "assistant") return current;
+          return [...current.slice(0, -1), { ...assistant, content: assistant.content + delta }];
+        });
+      });
+      if (!upstreamMessage.trim()) {
+        setMessages(nextMessages);
+        setError("The upstream provider returned no message");
+      }
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Could not send the gateway request");
+      if (streamStarted && !receivedContent) setMessages(nextMessages);
+      if (!controller.signal.aborted) {
+        setError(streamStarted
+          ? "The upstream response was interrupted"
+          : cause instanceof Error ? cause.message : "Could not send the gateway request");
+      }
     } finally {
+      if (requestController.current === controller) requestController.current = null;
       setPending(false);
     }
+  }
+
+  function stopChat() {
+    requestController.current?.abort();
   }
 
   return (
@@ -192,7 +213,7 @@ export default function PlaygroundPage() {
 
       <div className="mx-auto grid min-h-[calc(100svh-174px)] w-full max-w-[1500px] grid-cols-[minmax(0,1fr)_320px] max-lg:grid-cols-1">
         <section className="flex min-w-0 flex-col border-r border-line max-lg:border-r-0">
-          <div className="flex min-h-[470px] flex-1 flex-col gap-7 px-[clamp(1.25rem,4vw,4rem)] py-10" role="log" aria-live="polite" aria-label="Playground response">
+          <div className="flex min-h-[470px] flex-1 flex-col gap-7 px-[clamp(1.25rem,4vw,4rem)] py-10" role="log" aria-live={pending ? "off" : "polite"} aria-busy={pending} aria-label="Playground response">
             {messages.length === 0 ? (
               <div className="my-auto max-w-xl">
                 <p className="mb-3 font-mono text-xs text-brand">UPSTREAM TEST</p>
@@ -207,7 +228,7 @@ export default function PlaygroundPage() {
                 </article>
               ))
             )}
-            {pending && <p className="m-0 font-mono text-xs text-positive" role="status">Waiting for the upstream provider…</p>}
+            {pending && <p className="m-0 font-mono text-xs text-positive" role="status">Waiting for the upstream stream…</p>}
           </div>
 
           <form className="sticky bottom-0 border-t border-line bg-canvas/95 px-[clamp(1.25rem,4vw,4rem)] py-5 backdrop-blur-xl" id="playground-form" onSubmit={sendChat}>
@@ -215,8 +236,15 @@ export default function PlaygroundPage() {
             <div className="flex items-end gap-3 max-sm:flex-col">
               <label className="sr-only" htmlFor="playground-message">Message</label>
               <textarea className="min-h-24 max-h-48 w-full resize-y border border-line-strong bg-surface px-4 py-3 text-sm leading-6 text-ink outline-none transition-colors focus:border-brand" id="playground-message" value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} placeholder="Enter a test message…" required />
-              <button className="inline-flex h-12 min-w-28 items-center justify-center border border-brand bg-brand px-5 text-sm font-semibold text-canvas transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50 max-sm:w-full" disabled={pending || !model.trim()}>
-                {pending ? "Sending…" : "Send request"}
+              <button
+                className={pending
+                  ? "inline-flex h-12 min-w-28 items-center justify-center border border-danger px-5 text-sm font-semibold text-danger transition-colors hover:bg-danger/10 max-sm:w-full"
+                  : "inline-flex h-12 min-w-28 items-center justify-center border border-brand bg-brand px-5 text-sm font-semibold text-canvas transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50 max-sm:w-full"}
+                type={pending ? "button" : "submit"}
+                onClick={pending ? stopChat : undefined}
+                disabled={!pending && !model.trim()}
+              >
+                {pending ? "Stop" : "Send request"}
               </button>
             </div>
             <div className="mt-3 flex items-center justify-between gap-4 font-mono text-[0.65rem] text-muted">
