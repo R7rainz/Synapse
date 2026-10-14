@@ -46,7 +46,7 @@
 - [x] Validate chat-completion request fields and supported models.
 - [ ] Configure the provider and keep provider credentials server-side.
 - [x] Map provider failures to stable gateway responses.
-- [ ] Add streaming responses if the frontend needs them.
+- [x] Add streaming responses if the frontend needs them.
 - [x] Record provider, model, status, latency, and token usage reliably.
 - [x] Add gateway unit and integration tests without making paid provider calls.
 - [x] Add fixed-window request rate limits for users and API keys before exposing the gateway publicly.
