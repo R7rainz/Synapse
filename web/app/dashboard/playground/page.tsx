@@ -196,33 +196,33 @@ export default function PlaygroundPage() {
   }
 
   return (
-    <div className="min-h-svh">
-      <header className="border-b border-line px-[clamp(1.25rem,4vw,4rem)] py-8">
-        <div className="mx-auto flex w-full max-w-[1500px] items-end justify-between gap-8 max-md:items-start max-md:flex-col">
+    <div className="min-h-svh bg-canvas">
+      <header className="dashboard-header">
+        <div className="dashboard-container flex items-end justify-between gap-8 max-md:items-start max-md:flex-col">
           <div>
-            <p className="mb-3 font-mono text-[0.68rem] tracking-[0.14em] text-brand uppercase">Diagnostic tool</p>
-            <h1 className="m-0 text-[clamp(2.2rem,4vw,4.2rem)] leading-none font-semibold tracking-[-0.05em]">Gateway playground</h1>
-            <p className="mt-4 mb-0 max-w-2xl text-sm leading-6 text-muted">Send a test request through Synapse to the configured upstream provider. Synapse authenticates, enriches, forwards, and records the request—it does not host the model.</p>
+            <p className="dashboard-kicker">Diagnostic tool</p>
+            <h1 className="dashboard-title">Playground</h1>
+            <p className="dashboard-description">Send a test request through Synapse to the configured upstream provider.</p>
           </div>
           <label className="grid w-full max-w-sm gap-2 text-sm font-medium text-soft">
             Upstream model
-            <input className="h-11 border border-line-strong bg-surface px-3 font-mono text-xs text-ink outline-none transition-colors focus:border-brand" value={model} onChange={(event) => setModel(event.target.value)} placeholder="provider-model" required form="playground-form" />
+            <input className="form-control h-11 border-line-strong bg-canvas px-3 font-mono text-xs text-ink" value={model} onChange={(event) => setModel(event.target.value)} placeholder="provider-model" required form="playground-form" />
           </label>
         </div>
       </header>
 
-      <div className="mx-auto grid min-h-[calc(100svh-174px)] w-full max-w-[1500px] grid-cols-[minmax(0,1fr)_320px] max-lg:grid-cols-1">
-        <section className="flex min-w-0 flex-col border-r border-line max-lg:border-r-0">
+      <div className="dashboard-container grid min-h-[calc(100svh-194px)] grid-cols-[minmax(0,1fr)_340px] gap-3 px-[clamp(1.25rem,4vw,3rem)] py-6 max-lg:grid-cols-1">
+        <section className="dashboard-panel flex min-w-0 flex-col overflow-hidden max-lg:order-2">
           <div className="flex min-h-[470px] flex-1 flex-col gap-7 px-[clamp(1.25rem,4vw,4rem)] py-10" role="log" aria-live={pending ? "off" : "polite"} aria-busy={pending} aria-label="Playground response">
             {messages.length === 0 ? (
               <div className="my-auto max-w-xl">
-                <p className="mb-3 font-mono text-xs text-brand">UPSTREAM TEST</p>
-                <h2 className="m-0 text-2xl font-semibold tracking-[-0.03em]">Send a diagnostic request</h2>
-                <p className="mt-3 mb-0 text-sm leading-7 text-muted">Choose an upstream model and send a message. Add inline files for the model to read directly, optional Knowledge for retrieval, or both.</p>
+                <p className="dashboard-kicker">Upstream test</p>
+                <h2 className="dashboard-panel-title">Send a diagnostic request</h2>
+                <p className="mt-3 mb-0 text-sm leading-7 text-muted">Choose a model and send a message. Add inline files, optional Knowledge, or both.</p>
               </div>
             ) : (
               messages.map((message, index) => (
-                <article className="grid max-w-4xl grid-cols-[110px_minmax(0,1fr)] gap-5 max-sm:grid-cols-1 max-sm:gap-2" key={`${message.role}-${index}`}>
+                <article className="grid max-w-4xl grid-cols-[110px_minmax(0,1fr)] gap-5 border-b border-line pb-6 max-sm:grid-cols-1 max-sm:gap-2" key={`${message.role}-${index}`}>
                   <span className={`font-mono text-[0.68rem] uppercase ${message.role === "user" ? "text-brand" : "text-positive"}`}>{message.role === "user" ? "Request" : "Upstream"}</span>
                   <p className="m-0 whitespace-pre-wrap text-sm leading-7 text-soft">{message.content}</p>
                 </article>
@@ -231,15 +231,15 @@ export default function PlaygroundPage() {
             {pending && <p className="m-0 font-mono text-xs text-positive" role="status">Waiting for the upstream stream…</p>}
           </div>
 
-          <form className="sticky bottom-0 border-t border-line bg-canvas/95 px-[clamp(1.25rem,4vw,4rem)] py-5 backdrop-blur-xl" id="playground-form" onSubmit={sendChat}>
-            {error && <p className="mt-0 mb-3 border-l-2 border-danger bg-danger/5 px-3 py-2 text-sm text-danger" role="alert">{error}</p>}
+          <form className="sticky bottom-0 border-t border-line bg-surface px-[clamp(1.25rem,4vw,3rem)] py-5" id="playground-form" onSubmit={sendChat}>
+            {error && <p className="mt-0 mb-3 rounded-md border-l-2 border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">{error}</p>}
             <div className="flex items-end gap-3 max-sm:flex-col">
               <label className="sr-only" htmlFor="playground-message">Message</label>
-              <textarea className="min-h-24 max-h-48 w-full resize-y border border-line-strong bg-surface px-4 py-3 text-sm leading-6 text-ink outline-none transition-colors focus:border-brand" id="playground-message" value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} placeholder="Enter a test message…" required />
+              <textarea className="form-control dashboard-control min-h-24 max-h-48 w-full resize-y px-4 py-3 text-sm leading-6" id="playground-message" value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} placeholder="Enter a test message…" required />
               <button
                 className={pending
-                  ? "inline-flex h-12 min-w-28 items-center justify-center border border-danger px-5 text-sm font-semibold text-danger transition-colors hover:bg-danger/10 max-sm:w-full"
-                  : "inline-flex h-12 min-w-28 items-center justify-center border border-brand bg-brand px-5 text-sm font-semibold text-canvas transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50 max-sm:w-full"}
+                  ? "button-outline h-12 min-w-28 rounded-lg border-danger text-danger hover:bg-danger/10 max-sm:w-full"
+                  : "button-primary h-12 min-w-28 rounded-lg border-brand bg-brand text-canvas hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50 max-sm:w-full"}
                 type={pending ? "button" : "submit"}
                 onClick={pending ? stopChat : undefined}
                 disabled={!pending && !model.trim()}
@@ -254,14 +254,14 @@ export default function PlaygroundPage() {
           </form>
         </section>
 
-        <aside className="bg-surface/45 px-5 py-7 max-lg:order-first max-lg:border-b max-lg:border-line" aria-label="Optional retrieval context">
+        <aside className="dashboard-panel p-5 max-lg:order-first" aria-label="Optional retrieval context">
           <section className="mb-7 border-b border-line pb-7" aria-labelledby="inline-files-heading">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="m-0 text-sm font-semibold text-ink" id="inline-files-heading">Inline files</h2>
+              <h2 className="m-0 text-base font-normal text-ink" id="inline-files-heading">Inline files</h2>
               <span className="font-mono text-[0.62rem] text-muted">{formatBytes(files.reduce((total, file) => total + file.size, 0))} / 15 MB</span>
             </div>
             <p className="mt-3 mb-5 text-xs leading-5 text-muted">Files are sent with the next request for the upstream model to read. Synapse does not store them.</p>
-            <label className="flex min-h-10 cursor-pointer items-center justify-center border border-line-strong px-3 text-xs font-semibold text-soft transition-colors hover:border-brand hover:text-brand">
+            <label className="flex min-h-10 cursor-pointer items-center justify-center rounded-full border border-line-strong px-3 text-xs font-semibold text-soft transition-colors hover:border-brand hover:text-brand">
               Attach files
               <input className="sr-only" type="file" accept={acceptedFileTypes} multiple onChange={addFiles} disabled={pending} />
             </label>

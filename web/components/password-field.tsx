@@ -50,11 +50,11 @@ export function PasswordField({
   const strengthLevel = strengthLevels[strength - 1];
 
   return (
-    <label className="grid gap-2 text-sm font-medium text-soft" htmlFor={id}>
+    <label className="grid gap-2 text-sm font-medium text-ink-dark" htmlFor={id}>
       {label}
       <span className="relative">
         <input
-          className="h-12 w-full border border-line-strong bg-surface px-3 pr-12 text-sm text-ink outline-none transition-colors focus:border-brand"
+          className="form-control h-12 w-full px-3 pr-12 text-sm"
           id={id}
           name={name}
           type={visible ? "text" : "password"}
@@ -69,7 +69,7 @@ export function PasswordField({
         <button
           aria-label={visible ? "Hide password" : "Show password"}
           aria-pressed={visible}
-          className="absolute top-1/2 right-0 grid h-12 w-12 -translate-y-1/2 place-items-center text-muted transition-colors hover:text-ink"
+          className="absolute top-1/2 right-0 grid h-12 w-12 -translate-y-1/2 place-items-center text-body-dark transition-colors hover:text-deep-green"
           type="button"
           onClick={() => setVisible((current) => !current)}
         >
@@ -89,10 +89,10 @@ export function PasswordField({
         <span className="grid gap-2" aria-live="polite">
           <span className="flex gap-1" aria-label={strength ? `Password strength: ${strengthLevel.label}` : "Password strength not set"}>
             {strengthLevels.map((level, index) => (
-              <span className={`h-1 flex-1 ${index < strength ? level.fillClass : "bg-line"}`} key={level.label} />
+              <span className={`h-1 flex-1 ${index < strength ? level.fillClass : "bg-hairline"}`} key={level.label} />
             ))}
           </span>
-          <span className="flex items-center justify-between text-xs font-normal text-muted">
+          <span className="flex items-center justify-between text-xs font-normal text-body-dark">
             <span>Use 8+ characters with a mix of letters, numbers, and symbols.</span>
             {strengthLevel && <span className={`font-medium ${strengthLevel.textClass}`}>{strengthLevel.label}</span>}
           </span>

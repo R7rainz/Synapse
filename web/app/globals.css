@@ -13,8 +13,20 @@
   --color-brand-light: #ff987a;
   --color-positive: #a8df65;
   --color-danger: #ff6175;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --color-paper: #fbfaf7;
+  --color-stone: #eeece7;
+  --color-deep-green: #003c33;
+  --color-navy: #071829;
+  --color-ink-dark: #17171c;
+  --color-body-dark: #616161;
+  --color-hairline: #d9d9dd;
+  --color-coral: #ff7759;
+  --color-coral-soft: #ffad9b;
+  --color-action-blue: #1863dc;
+  --color-focus: #4c6ee6;
+  --font-sans: "Noto Sans", "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Nimbus Sans Narrow", "Noto Sans", "Arial Narrow", sans-serif;
+  --font-mono: "JetBrainsMono Nerd Font", "Adwaita Mono", "SFMono-Regular", Consolas, monospace;
   --animate-page-in: page-in 240ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
@@ -57,13 +69,250 @@
   input,
   textarea,
   summary {
-    outline-color: #ff6b42;
+    outline-color: #4c6ee6;
     outline-offset: 3px;
   }
 
   input::placeholder,
   textarea::placeholder {
     color: #666d75;
+  }
+
+  :focus-visible {
+    outline: 2px solid #4c6ee6;
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .display-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.045em;
+    text-wrap: balance;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  .public-copy {
+    font-family: var(--font-sans);
+    color: #616161;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  .button-primary,
+  .button-secondary,
+  .button-outline {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+  }
+
+  .button-primary {
+    border: 1px solid #17171c;
+    background: #17171c;
+    color: #ffffff;
+  }
+
+  .button-primary:hover {
+    background: #003c33;
+    transform: translateY(-1px);
+  }
+
+  .button-secondary {
+    border: 1px solid transparent;
+    color: #17171c;
+  }
+
+  .button-secondary:hover {
+    color: #003c33;
+    text-decoration: underline;
+    text-underline-offset: 0.25rem;
+  }
+
+  .button-outline {
+    border: 1px solid currentColor;
+    color: #17171c;
+  }
+
+  .button-outline:hover {
+    border-color: #003c33;
+    color: #003c33;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    min-height: 1.75rem;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid currentColor;
+    border-radius: 9999px;
+    padding: 0.2rem 0.65rem;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .status-pill::before {
+    width: 0.35rem;
+    height: 0.35rem;
+    border-radius: 9999px;
+    background: currentColor;
+    content: "";
+  }
+
+  .light-field {
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
+    color: #17171c;
+  }
+
+  .dark-field {
+    border: 1px solid #262a2f;
+    background: #0e1012;
+    color: #e3e6e9;
+  }
+
+  .section-rule {
+    border-top: 1px solid #d9d9dd;
+    border-bottom: 1px solid #d9d9dd;
+  }
+
+  .form-control {
+    border: 1px solid #d9d9dd;
+    border-radius: 0.5rem;
+    background: #ffffff;
+    color: #17171c;
+    outline: none;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .form-control:focus {
+    border-color: #4c6ee6;
+    box-shadow: 0 0 0 3px rgb(76 110 230 / 15%);
+  }
+
+  .card-lift {
+    box-shadow: 0 18px 48px rgb(23 23 28 / 8%);
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+
+  .card-lift:hover {
+    border-color: rgb(0 60 51 / 32%);
+    box-shadow: 0 24px 64px rgb(23 23 28 / 12%);
+    transform: translateY(-2px);
+  }
+
+  .metric-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.875rem;
+    border: 1px solid #262a2f;
+    background: #0e1012;
+    transition: border-color 160ms ease;
+  }
+
+  .metric-card::before {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 2px;
+    background: #434950;
+    content: "";
+  }
+
+  .metric-card:hover {
+    border-color: #434950;
+  }
+
+  .metric-card[data-accent="true"]::before {
+    background: #ff6b42;
+  }
+
+  .table-shell {
+    box-shadow: none;
+  }
+
+  .dashboard-header {
+    border-bottom: 1px solid #262a2f;
+    background: #0e1012;
+    padding: 2rem clamp(1.25rem, 4vw, 3rem);
+  }
+
+  .dashboard-container {
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+  }
+
+  .dashboard-kicker {
+    margin: 0 0 0.55rem;
+    color: #ff6b42;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  .dashboard-title {
+    margin: 0;
+    color: #e3e6e9;
+    font-family: var(--font-sans);
+    font-size: clamp(2rem, 3vw, 2.5rem);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+  }
+
+  .dashboard-description {
+    max-width: 42rem;
+    margin: 0.75rem 0 0;
+    color: #777e87;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .dashboard-panel {
+    border: 1px solid #262a2f;
+    border-radius: 0.75rem;
+    background: #0e1012;
+  }
+
+  .dashboard-panel-title {
+    margin: 0;
+    color: #e3e6e9;
+    font-size: 1.125rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.35;
+  }
+
+  .dashboard-control {
+    border-color: #434950;
+    background: #090a0b;
+    color: #e3e6e9;
+  }
+
+  .dashboard-header .button-primary:hover,
+  .dashboard-panel .button-primary:hover {
+    transform: none;
   }
 }
 
@@ -77,6 +326,95 @@
 .dot-field {
   background-image: radial-gradient(rgba(227, 230, 233, 0.15) 0.7px, transparent 0.7px);
   background-size: 8px 8px;
+}
+
+.route-visual {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.route-visual::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(circle at 52% 46%, rgb(255 119 89 / 14%), transparent 38%);
+  content: "";
+  pointer-events: none;
+}
+
+.route-visual-map {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4rem minmax(0, 1.2fr) 4rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.route-node {
+  display: flex;
+  min-height: 7.5rem;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 0.75rem;
+  background: rgb(0 0 0 / 16%);
+  padding: 0.75rem;
+}
+
+.route-node-accent {
+  border-color: rgb(255 119 89 / 70%);
+  background: rgb(255 119 89 / 10%);
+}
+
+.route-node-marker {
+  color: rgb(255 255 255 / 48%);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
+.route-node strong {
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.route-node small {
+  color: rgb(255 255 255 / 52%);
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+.route-rail {
+  position: relative;
+  height: 1px;
+  background: rgb(255 255 255 / 22%);
+}
+
+.route-packet {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 9999px;
+  background: #ff7759;
+  transform: translate(-50%, -50%);
+  animation: route-packet 2.8s ease-in-out infinite;
+}
+
+.route-packet-delay {
+  animation-delay: 1.4s;
+}
+
+@keyframes route-packet {
+  0%,
+  100% {
+    left: 0;
+    opacity: 0.3;
+  }
+  50% {
+    left: 100%;
+    opacity: 1;
+  }
 }
 
 @keyframes page-in {
@@ -98,5 +436,41 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .route-packet {
+    animation: none;
+    left: 50%;
+    opacity: 0.8;
+  }
+}
+
+@media (max-width: 640px) {
+  .route-visual-map {
+    grid-template-columns: 1fr;
+  }
+
+  .route-rail {
+    width: 1px;
+    height: 1.5rem;
+    margin-inline: auto;
+  }
+
+  .route-packet {
+    top: 0;
+    left: 50%;
+    animation-name: route-packet-vertical;
+  }
+
+  @keyframes route-packet-vertical {
+    0%,
+    100% {
+      top: 0;
+      opacity: 0.3;
+    }
+    50% {
+      top: 100%;
+      opacity: 1;
+    }
   }
 }

@@ -41,32 +41,33 @@ export default function AccountPage() {
   if (!session) return null;
 
   return (
-    <div className="min-h-svh">
-      <header className="border-b border-line px-[clamp(1.25rem,4vw,4rem)] py-8">
+    <div className="min-h-svh bg-canvas">
+      <header className="dashboard-header">
         <div className="mx-auto w-full max-w-[1200px]">
-          <p className="mb-3 font-mono text-[0.68rem] tracking-[0.14em] text-brand uppercase">Workspace owner</p>
-          <h1 className="m-0 text-[clamp(2.2rem,4vw,4.2rem)] leading-none font-semibold tracking-[-0.05em]">Account</h1>
-          <p className="mt-4 mb-0 max-w-2xl text-sm leading-6 text-muted">Review the identity connected to this workspace and the API connection it uses.</p>
+          <p className="dashboard-kicker">Workspace owner</p>
+          <h1 className="dashboard-title">Account</h1>
+          <p className="dashboard-description">Review the identity connected to this workspace and its API connection.</p>
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-[1200px] grid-cols-[280px_minmax(0,1fr)] max-md:grid-cols-1">
-        <aside className="border-r border-line bg-surface/45 px-7 py-10 max-md:border-r-0 max-md:border-b">
-          <span className="grid size-20 place-items-center border border-line-strong bg-raised text-3xl font-semibold text-brand" aria-hidden="true">
+      <div className="mx-auto grid w-full max-w-[1200px] grid-cols-[260px_minmax(0,1fr)] gap-3 px-[clamp(1.25rem,4vw,3rem)] py-6 max-md:grid-cols-1">
+        <aside className="dashboard-panel px-6 py-6">
+          <span className="grid size-14 place-items-center rounded-xl border border-line-strong bg-raised text-xl font-semibold text-brand" aria-hidden="true">
             {session.user.name?.charAt(0).toUpperCase() || "U"}
           </span>
-          <h2 className="mt-5 mb-1 truncate text-lg font-semibold">{session.user.name || "Unnamed account"}</h2>
+          <h2 className="mt-5 mb-1 truncate text-lg font-normal text-ink">{session.user.name || "Unnamed account"}</h2>
           <p className="m-0 break-all text-sm text-muted">{session.user.email}</p>
-          <p className="mt-6 mb-0 flex items-center gap-2 font-mono text-xs text-positive"><span className="size-1.5 rounded-full bg-positive" /> Signed in</p>
+          <p className="mt-6 mb-0 status-pill text-positive">Signed in</p>
         </aside>
 
-        <section className="px-[clamp(1.25rem,5vw,5rem)] py-10">
+        <section className="dashboard-panel p-6 max-sm:p-4">
           <div className="mb-8 flex items-center justify-between gap-5 max-sm:items-start max-sm:flex-col">
             <div>
-              <h2 className="m-0 text-xl font-semibold">Account details</h2>
+              <p className="dashboard-kicker">Identity record</p>
+              <h2 className="dashboard-panel-title">Account details</h2>
               <p className="mt-2 mb-0 text-sm text-muted">Authentication is managed by Better Auth.</p>
             </div>
-            <button className="min-h-11 border border-line-strong px-4 text-sm font-semibold text-soft transition-colors hover:border-danger hover:text-danger disabled:opacity-50" type="button" onClick={signOut} disabled={signingOut}>
+            <button className="button-outline min-h-11 rounded-lg border-line-strong text-soft hover:border-danger hover:text-danger disabled:opacity-50" type="button" onClick={signOut} disabled={signingOut}>
               {signingOut ? "Signing out…" : "Sign out"}
             </button>
           </div>

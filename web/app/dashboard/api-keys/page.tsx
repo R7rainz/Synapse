@@ -99,28 +99,28 @@ export default function APIKeysPage() {
   const activeCount = keys.filter((key) => !key.revoked_at).length;
 
   return (
-    <div className="min-h-svh">
-      <header className="border-b border-line px-[clamp(1.25rem,4vw,4rem)] py-8">
-        <div className="mx-auto w-full max-w-[1500px]">
-          <p className="mb-3 font-mono text-[0.68rem] tracking-[0.14em] text-brand uppercase">Application access</p>
-          <h1 className="m-0 text-[clamp(2.2rem,4vw,4.2rem)] leading-none font-semibold tracking-[-0.05em]">API keys</h1>
-          <p className="mt-4 mb-0 max-w-2xl text-sm leading-6 text-muted">Create scoped credentials for applications calling the public gateway. The dashboard Playground uses your login session instead.</p>
+    <div className="min-h-svh bg-canvas">
+      <header className="dashboard-header">
+        <div className="dashboard-container">
+          <p className="dashboard-kicker">Application access</p>
+          <h1 className="dashboard-title">API keys</h1>
+          <p className="dashboard-description">Create scoped credentials for applications calling the public gateway. The Playground uses your login session instead.</p>
         </div>
       </header>
 
       {error && <p className="m-0 border-b border-danger/40 bg-danger/5 px-[clamp(1.25rem,4vw,4rem)] py-3 text-sm text-danger" role="alert">{error}</p>}
 
-      <div className="mx-auto grid w-full max-w-[1500px] grid-cols-[minmax(0,1fr)_380px] max-lg:grid-cols-1">
-        <section className="min-w-0 border-r border-line px-[clamp(1.25rem,4vw,4rem)] py-10 max-lg:order-2 max-lg:border-r-0">
+      <div className="dashboard-container grid grid-cols-[minmax(0,1fr)_360px] gap-3 px-[clamp(1.25rem,4vw,3rem)] py-6 max-lg:grid-cols-1">
+        <section className="dashboard-panel min-w-0 p-6 max-lg:order-2 max-sm:p-4">
           <div className="mb-6 flex items-center justify-between gap-4">
-            <h2 className="m-0 text-lg font-semibold">Credentials</h2>
-            <span className="font-mono text-xs text-muted">{activeCount} active</span>
+            <div><p className="dashboard-kicker">Credential index</p><h2 className="dashboard-panel-title">Credentials</h2></div>
+            <span className="status-pill text-positive">{activeCount} active</span>
           </div>
 
           {loading && <p className="border-y border-line py-6 font-mono text-xs text-muted">Loading API keys…</p>}
           {!loading && keys.length === 0 && (
-            <div className="border-y border-line py-12">
-              <h3 className="m-0 text-lg font-semibold">No API keys yet</h3>
+            <div className="rounded-xl border border-line bg-raised px-5 py-12">
+              <h3 className="m-0 text-lg font-normal">No API keys yet</h3>
               <p className="mt-2 mb-0 max-w-lg text-sm leading-6 text-muted">Create a key when an application is ready to call the gateway.</p>
             </div>
           )}
@@ -140,12 +140,12 @@ export default function APIKeysPage() {
                 </thead>
                 <tbody>
                   {keys.map((key) => (
-                    <tr className="border-b border-line text-soft" key={key.id}>
+                    <tr className="border-b border-line text-soft last:border-b-0" key={key.id}>
                       <td className="py-4 pr-5 font-medium text-ink">{key.name}</td>
                       <td className="py-4 pr-5 font-mono text-xs">{key.key_prefix}</td>
                       <td className="py-4 pr-5 text-xs text-muted">{formatDate(key.created_at)}</td>
                       <td className="py-4 pr-5 text-xs text-muted">{formatDate(key.last_used_at)}</td>
-                      <td className={`py-4 pr-5 font-mono text-xs ${key.revoked_at ? "text-danger" : "text-positive"}`}>{key.revoked_at ? "Revoked" : "Active"}</td>
+                      <td className="py-4 pr-5"><span className={`status-pill ${key.revoked_at ? "text-danger" : "text-positive"}`}>{key.revoked_at ? "Revoked" : "Active"}</span></td>
                       <td className="py-4 text-right">
                         {!key.revoked_at && <button className="min-h-10 px-2 text-xs text-muted transition-colors hover:text-danger disabled:opacity-50" type="button" onClick={() => revokeKey(key)} disabled={revokingID === key.id}>{revokingID === key.id ? "Revoking…" : "Revoke"}</button>}
                       </td>
@@ -157,25 +157,26 @@ export default function APIKeysPage() {
           </div>
         </section>
 
-        <aside className="bg-surface/45 px-7 py-10 max-lg:order-1 max-lg:border-b max-lg:border-line max-sm:px-4">
-          <h2 className="m-0 text-lg font-semibold">Create a key</h2>
+        <aside className="dashboard-panel px-6 py-6 max-lg:order-1 max-sm:px-4">
+          <p className="dashboard-kicker">New credential</p>
+          <h2 className="dashboard-panel-title">Create a key</h2>
           <p className="mt-2 mb-7 text-sm leading-6 text-muted">Use a descriptive name so you know which application can be safely revoked later.</p>
           <form className="grid gap-4" onSubmit={createKey}>
             <label className="grid gap-2 text-sm font-medium text-soft">
               Key name
-              <input className="h-11 border border-line-strong bg-canvas px-3 text-sm text-ink outline-none transition-colors focus:border-brand" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} placeholder="Development app" required />
+              <input className="form-control dashboard-control h-11 px-3 text-sm" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} placeholder="Development app" required />
             </label>
-            <button className="h-11 border border-brand bg-brand px-4 text-sm font-semibold text-canvas transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50" disabled={creating}>
+            <button className="button-primary h-11 rounded-lg border-brand bg-brand text-canvas hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50" disabled={creating}>
               {creating ? "Creating…" : "Create API key"}
             </button>
           </form>
 
           {newKey && (
-            <div className="mt-8 border-l-2 border-brand bg-brand/5 px-4 py-4">
-              <h3 className="m-0 text-sm font-semibold text-brand">Copy this key now</h3>
+            <div className="mt-8 rounded-xl border border-brand/40 bg-brand/5 px-4 py-4">
+              <h3 className="m-0 text-sm font-semibold text-brand-light">Copy this key now</h3>
               <p className="mt-2 mb-4 text-xs leading-5 text-muted">For security, the complete value will not be shown again.</p>
-              <code className="block break-all bg-canvas p-3 font-mono text-xs leading-5 text-soft">{newKey}</code>
-              <button className="mt-3 min-h-10 border border-line-strong px-3 text-xs font-semibold text-soft transition-colors hover:border-brand hover:text-brand" type="button" onClick={copyKey}>{copied ? "Copied" : "Copy key"}</button>
+              <code className="block break-all rounded-lg bg-canvas p-3 font-mono text-xs leading-5 text-soft">{newKey}</code>
+              <button className="mt-3 min-h-10 rounded-lg border border-line-strong px-4 text-xs font-semibold text-soft transition-colors hover:border-brand hover:text-brand" type="button" onClick={copyKey}>{copied ? "Copied" : "Copy key"}</button>
             </div>
           )}
         </aside>

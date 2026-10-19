@@ -73,28 +73,28 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="min-h-svh">
-      <header className="border-b border-line px-[clamp(1.25rem,4vw,4rem)] py-8">
-        <div className="mx-auto w-full max-w-[1500px]">
-          <p className="mb-3 font-mono text-[0.68rem] tracking-[0.14em] text-brand uppercase">Optional retrieval</p>
-          <h1 className="m-0 text-[clamp(2.2rem,4vw,4.2rem)] leading-none font-semibold tracking-[-0.05em]">Knowledge</h1>
-          <p className="mt-4 mb-0 max-w-2xl text-sm leading-6 text-muted">Add source text only when a request needs retrieval context. Leave this empty to forward requests directly to the upstream provider.</p>
+    <div className="min-h-svh bg-canvas">
+      <header className="dashboard-header">
+        <div className="dashboard-container">
+          <p className="dashboard-kicker">Optional retrieval</p>
+          <h1 className="dashboard-title">Knowledge</h1>
+          <p className="dashboard-description">Add source text only when a request needs retrieval context. Leave this empty to forward requests directly upstream.</p>
         </div>
       </header>
 
       {error && <p className="m-0 border-b border-danger/40 bg-danger/5 px-[clamp(1.25rem,4vw,4rem)] py-3 text-sm text-danger" role="alert">{error}</p>}
 
-      <div className="mx-auto grid w-full max-w-[1500px] grid-cols-[minmax(0,1fr)_420px] max-xl:grid-cols-[minmax(0,1fr)_360px] max-lg:grid-cols-1">
-        <section className="min-w-0 border-r border-line px-[clamp(1.25rem,4vw,4rem)] py-10 max-lg:order-2 max-lg:border-r-0">
+      <div className="dashboard-container grid grid-cols-[minmax(0,1fr)_380px] gap-3 px-[clamp(1.25rem,4vw,3rem)] py-6 max-lg:grid-cols-1">
+        <section className="dashboard-panel min-w-0 p-6 max-lg:order-2 max-sm:p-4">
           <div className="mb-6 flex items-center justify-between gap-4">
-            <h2 className="m-0 text-lg font-semibold">Stored documents</h2>
-            <span className="font-mono text-xs text-muted">{documents.length} total</span>
+            <div><p className="dashboard-kicker">Knowledge index</p><h2 className="dashboard-panel-title">Stored documents</h2></div>
+            <span className="status-pill text-muted">{documents.length} total</span>
           </div>
 
           {loading && <p className="border-y border-line py-6 font-mono text-xs text-muted">Loading documents…</p>}
           {!loading && documents.length === 0 && (
-            <div className="border-y border-line py-12">
-              <h3 className="m-0 text-lg font-semibold">No documents yet</h3>
+            <div className="rounded-xl border border-line bg-raised px-5 py-12">
+              <h3 className="m-0 text-lg font-normal">No documents yet</h3>
               <p className="mt-2 mb-0 max-w-lg text-sm leading-6 text-muted">Add source text using the form. Synapse will split it into chunks and create embeddings for retrieval.</p>
             </div>
           )}
@@ -117,20 +117,21 @@ export default function DocumentsPage() {
           </div>
         </section>
 
-        <aside className="bg-surface/45 px-7 py-10 max-lg:order-1 max-lg:border-b max-lg:border-line max-sm:px-4">
-          <h2 className="m-0 text-lg font-semibold">Add a document</h2>
+        <aside className="dashboard-panel px-6 py-6 max-lg:order-1 max-sm:px-4">
+          <p className="dashboard-kicker">Knowledge ingestion</p>
+          <h2 className="dashboard-panel-title">Add a document</h2>
           <p className="mt-2 mb-7 text-sm leading-6 text-muted">Document creation calls your configured embedding provider and may use provider credits.</p>
           <form className="grid gap-5" onSubmit={createDocument}>
             <label className="grid gap-2 text-sm font-medium text-soft">
               Title
-              <input className="h-11 border border-line-strong bg-canvas px-3 text-sm text-ink outline-none transition-colors focus:border-brand" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} placeholder="Product handbook" required />
+              <input className="form-control dashboard-control h-11 px-3 text-sm" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} placeholder="Product handbook" required />
             </label>
             <label className="grid gap-2 text-sm font-medium text-soft">
               Source text
-              <textarea className="min-h-64 w-full resize-y border border-line-strong bg-canvas px-3 py-3 text-sm leading-6 text-ink outline-none transition-colors focus:border-brand" value={content} onChange={(event) => setContent(event.target.value)} maxLength={65536} placeholder="Paste the material you want Synapse to retrieve…" required />
+              <textarea className="form-control dashboard-control min-h-64 w-full resize-y px-3 py-3 text-sm leading-6" value={content} onChange={(event) => setContent(event.target.value)} maxLength={65536} placeholder="Paste the material you want Synapse to retrieve…" required />
               <span className="text-right font-mono text-[0.62rem] font-normal text-muted">{content.length.toLocaleString()} / 65,536</span>
             </label>
-            <button className="h-11 border border-brand bg-brand px-4 text-sm font-semibold text-canvas transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50" disabled={creating}>
+            <button className="button-primary h-11 rounded-lg border-brand bg-brand text-canvas hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50" disabled={creating}>
               {creating ? "Creating embeddings…" : "Add document"}
             </button>
           </form>

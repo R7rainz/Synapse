@@ -43,84 +43,129 @@ export default function DashboardPage() {
   const rateLimitedCount = summary?.rate_limited_count ?? 0;
   const errorRate = requestCount === 0 ? 0 : Math.round((errorCount / requestCount) * 100);
   const activeKeys = keys.filter((key) => !key.revoked_at).length;
+  const quota = summary?.monthly_token_quota ?? 0;
+  const quotaUsed = summary?.monthly_tokens ?? 0;
+  const quotaPercent = quota === 0 ? 0 : Math.min(100, Math.round((quotaUsed / quota) * 100));
+  const provider = summary?.provider || "Provider not configured";
+  const gatewayStatus = loading ? "Syncing" : summary?.provider ? "Operational" : "Needs setup";
+
+  const metrics = [
+    ["Requests", loading ? "—" : requestCount.toLocaleString(), "24 hour window", "true"],
+    ["Avg. latency", loading ? "—" : `${summary?.average_latency_ms ?? 0} ms`, "across completed calls", undefined],
+    ["Error rate", loading ? "—" : `${errorRate}%`, `${errorCount.toLocaleString()} failed requests`, undefined],
+    ["Active keys", loading ? "—" : activeKeys.toLocaleString(), `${keys.length} total credentials`, undefined],
+  ] as const;
 
   return (
-    <div className="min-h-svh">
-      <header className="border-b border-line px-[clamp(1.25rem,4vw,4rem)] py-8">
-        <div className="mx-auto flex w-full max-w-[1500px] items-end justify-between gap-8 max-md:items-start max-md:flex-col">
-          <div>
-            <p className="mb-3 font-mono text-[0.68rem] tracking-[0.14em] text-brand uppercase">Gateway control plane</p>
-            <h1 className="m-0 text-[clamp(2.2rem,4vw,4.2rem)] leading-none font-semibold tracking-[-0.05em]">Overview</h1>
-            <p className="mt-4 mb-0 max-w-2xl text-sm leading-6 text-muted">Monitor the boundary between your applications and the configured upstream LLM provider.</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link className="inline-flex min-h-11 items-center border border-line-strong px-4 text-sm font-semibold text-soft transition-colors hover:border-soft hover:text-ink" href="/dashboard/playground">Test gateway</Link>
-            <Link className="inline-flex min-h-11 items-center border border-brand bg-brand px-4 text-sm font-semibold text-canvas transition-colors hover:bg-brand-light" href="/dashboard/api-keys">Manage API keys</Link>
+    <div className="min-h-svh bg-canvas">
+      <header className="dashboard-header">
+        <div className="dashboard-container">
+          <div className="flex items-end justify-between gap-8 max-md:flex-col max-md:items-start">
+            <div>
+              <p className="dashboard-kicker">Gateway control plane</p>
+              <h1 className="dashboard-title">Overview</h1>
+              <p className="dashboard-description">Monitor gateway health, recent traffic, credentials, and usage.</p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-3">
+              <Link className="button-outline rounded-lg border-line-strong text-soft hover:border-brand hover:text-brand" href="/dashboard/playground">Test gateway <span className="ml-2" aria-hidden="true">↗</span></Link>
+              <Link className="button-primary rounded-lg border-brand bg-brand text-canvas hover:bg-brand-light" href="/dashboard/api-keys">Create API key</Link>
+            </div>
           </div>
         </div>
       </header>
 
       {error && <p className="m-0 border-b border-danger/40 bg-danger/5 px-[clamp(1.25rem,4vw,4rem)] py-3 text-sm text-danger" role="alert">{error}</p>}
 
-      <div className="mx-auto w-full max-w-[1500px]">
-        <section className="grid grid-cols-5 border-b border-line max-xl:grid-cols-2 max-sm:grid-cols-1" aria-label="Gateway metrics">
-          {[
-            ["Requests", loading ? "—" : requestCount.toLocaleString(), "last 24 hours"],
-            ["Errors", loading ? "—" : errorCount.toLocaleString(), loading ? "loading" : `${errorRate}% of requests`],
-            ["Rate-limited", loading ? "—" : rateLimitedCount.toLocaleString(), "last 24 hours"],
-            ["Average latency", loading ? "—" : `${summary?.average_latency_ms ?? 0} ms`, "last 24 hours"],
-            ["Active API keys", loading ? "—" : activeKeys.toLocaleString(), `${keys.length} total credentials`],
-          ].map(([label, value, detail], index) => (
-            <article className={`min-h-44 px-7 py-7 ${index > 0 ? "border-l border-line max-sm:border-l-0" : ""} ${index >= 2 ? "max-xl:border-l-0 max-xl:border-t" : ""} ${index > 0 ? "max-xl:border-t" : ""}`} key={label}>
+      <div className="dashboard-container px-[clamp(1.25rem,4vw,3rem)] py-6">
+        <section className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-sm:grid-cols-1" aria-label="Gateway metrics">
+          {metrics.map(([label, value, detail, accent]) => (
+            <article className="metric-card px-5 py-5" data-accent={accent} key={label}>
               <p className="m-0 font-mono text-[0.65rem] tracking-[0.08em] text-muted uppercase">{label}</p>
-              <strong className="mt-7 block text-[clamp(2rem,4vw,3.8rem)] leading-none font-semibold tracking-[-0.05em] text-ink">{value}</strong>
+              <strong className="mt-5 block text-3xl leading-none font-semibold tracking-[-0.04em] text-ink">{value}</strong>
               <span className="mt-3 block text-xs text-muted">{detail}</span>
             </article>
           ))}
         </section>
 
-        <section className="grid grid-cols-[minmax(0,1fr)_340px] border-b border-line max-lg:grid-cols-1">
-          <div className="min-w-0 px-[clamp(1.25rem,4vw,4rem)] py-10">
-            <div className="mb-6 flex items-center justify-between gap-5">
+        <section className="mt-3 grid grid-cols-[minmax(0,1fr)_340px] gap-3 max-xl:grid-cols-1" aria-label="Gateway activity and health">
+          <article className="dashboard-panel min-w-0 overflow-hidden">
+            <div className="flex items-end justify-between gap-5 border-b border-line px-5 py-4">
               <div>
-                <p className="mb-2 font-mono text-[0.65rem] tracking-[0.08em] text-brand uppercase">Traffic</p>
-                <h2 className="m-0 text-xl font-semibold">Recent requests</h2>
+                <h2 className="dashboard-panel-title">Recent requests</h2>
+                <p className="mt-1 mb-0 text-xs text-muted">Latest gateway activity</p>
               </div>
-              <Link className="text-sm font-semibold text-soft transition-colors hover:text-brand" href="/dashboard/requests">View all</Link>
+              <Link className="shrink-0 text-sm text-soft transition-colors hover:text-brand" href="/dashboard/requests">View all <span aria-hidden="true">↗</span></Link>
             </div>
-            {loading ? <p className="border-y border-line py-10 font-mono text-xs text-muted">Loading request activity…</p> : <RequestTable requests={requests} />}
-          </div>
+            <div className="p-4">{loading ? <p className="m-0 px-2 py-10 font-mono text-xs text-muted">Loading request activity…</p> : <RequestTable requests={requests} />}</div>
+          </article>
 
-          <aside className="border-l border-line bg-surface/45 px-7 py-10 max-lg:border-t max-lg:border-l-0">
-            <p className="mb-2 font-mono text-[0.65rem] tracking-[0.08em] text-brand uppercase">Upstream</p>
-            <h2 className="m-0 text-xl font-semibold">{loading ? "Loading…" : summary?.provider || "Not configured"}</h2>
-            <p className="mt-3 mb-8 text-sm leading-6 text-muted">Synapse keeps the upstream credential server-side and forwards authenticated application requests to this provider.</p>
-
-            <div className="border-y border-line font-mono text-xs">
-              <div className="grid grid-cols-[28px_1fr] gap-3 border-b border-line py-3"><span className="text-muted">01</span><span className="text-soft">Application sends request</span></div>
-              <div className="grid grid-cols-[28px_1fr] gap-3 border-b border-line py-3"><span className="text-brand">02</span><span className="text-ink">Synapse authenticates and forwards</span></div>
-              <div className="grid grid-cols-[28px_1fr] gap-3 py-3"><span className="text-muted">03</span><span className="text-soft">Upstream generates response</span></div>
+          <aside className="dashboard-panel p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="dashboard-kicker">Gateway health</p>
+                <h2 className="dashboard-panel-title max-w-[15rem]">{provider}</h2>
+              </div>
+              <span className={`status-pill ${gatewayStatus === "Operational" ? "text-positive" : "text-brand"}`}>{gatewayStatus}</span>
             </div>
 
-            <div className="mt-8 border-y border-line font-mono text-xs">
-              <div className="flex items-center justify-between gap-4 border-b border-line py-3"><span className="text-muted">User limit</span><span className="text-soft">{summary?.user_requests_per_minute ?? 0}/min</span></div>
-              <div className="flex items-center justify-between gap-4 py-3"><span className="text-muted">Key limit</span><span className="text-soft">{summary?.api_key_requests_per_minute ?? 0}/min</span></div>
+            <div className="mt-6 border-y border-line font-mono text-xs text-soft">
+              <div className="grid grid-cols-[2rem_1fr] gap-3 border-b border-line py-3"><span className="text-muted">01</span><span>Application sends request</span></div>
+              <div className="grid grid-cols-[2rem_1fr] gap-3 border-b border-line py-3"><span className="text-brand">02</span><span>Synapse authenticates and forwards</span></div>
+              <div className="grid grid-cols-[2rem_1fr] gap-3 py-3"><span className="text-muted">03</span><span>Upstream returns response</span></div>
             </div>
 
-            <div className="mt-8 border-y border-line font-mono text-xs">
-              <div className="border-b border-line py-3"><span className="text-muted">24h tokens</span><div className="mt-2 flex justify-between gap-4 text-soft"><span>{(summary?.input_tokens ?? 0).toLocaleString()} in</span><span>{(summary?.output_tokens ?? 0).toLocaleString()} out</span></div></div>
-              <div className="flex items-center justify-between gap-4 py-3"><span className="text-muted">Month to date</span><span className="text-soft">{(summary?.monthly_tokens ?? 0).toLocaleString()} / {summary?.monthly_token_quota ? summary.monthly_token_quota.toLocaleString() : "∞"}</span></div>
+            <div className="mt-5 grid grid-cols-2 gap-2 font-mono text-xs">
+              <div className="rounded-lg border border-line bg-canvas p-3"><span className="block text-muted">User limit</span><span className="mt-2 block text-soft">{summary?.user_requests_per_minute ?? 0}/min</span></div>
+              <div className="rounded-lg border border-line bg-canvas p-3"><span className="block text-muted">Key limit</span><span className="mt-2 block text-soft">{summary?.api_key_requests_per_minute ?? 0}/min</span></div>
             </div>
           </aside>
         </section>
 
-        <section className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-8 px-[clamp(1.25rem,4vw,4rem)] py-10 max-md:grid-cols-1">
+        <section className="mt-3 grid grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] gap-3 max-lg:grid-cols-1" aria-label="Gateway details">
+          <article className="dashboard-panel p-5">
+            <div className="flex items-start justify-between gap-5">
+              <div>
+                <p className="dashboard-kicker">Public route</p>
+                <h2 className="dashboard-panel-title">One endpoint for every application</h2>
+              </div>
+              <span className="status-pill hidden text-positive sm:inline-flex">OpenAI-compatible</span>
+            </div>
+            <div className="mt-7 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-line bg-canvas px-4 py-4">
+              <code className="font-mono text-sm text-soft">POST /v1/chat/completions</code>
+              <Link className="text-sm text-brand hover:text-brand-light" href="/dashboard/playground">Open playground <span aria-hidden="true">↗</span></Link>
+            </div>
+            <div className="mt-6 grid grid-cols-3 gap-3 font-mono text-[0.65rem] text-muted max-sm:grid-cols-1">
+              <span>Auth / API key</span>
+              <span>Storage / metadata only</span>
+              <span>Boundary / server-side</span>
+            </div>
+          </article>
+
+          <article className="dashboard-panel p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="dashboard-kicker">Usage</p>
+                <h2 className="dashboard-panel-title">Token volume</h2>
+              </div>
+              <span className="font-mono text-xs text-muted">Month to date</span>
+            </div>
+            <div className="mt-7 flex items-end justify-between gap-4">
+              <strong className="text-3xl font-semibold tracking-[-0.04em] text-ink">{quotaUsed.toLocaleString()}</strong>
+              <span className="font-mono text-xs text-muted">{quota ? `${quota.toLocaleString()} quota` : "No quota set"}</span>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-raised" role="progressbar" aria-label="Monthly token quota used" aria-valuemin={0} aria-valuemax={100} aria-valuenow={quotaPercent}>
+              <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${quota ? quotaPercent : 0}%` }} />
+            </div>
+            <div className="mt-4 flex justify-between gap-4 font-mono text-[0.65rem] text-muted"><span>24h: {(summary?.input_tokens ?? 0).toLocaleString()} in · {(summary?.output_tokens ?? 0).toLocaleString()} out</span><span>{quota ? `${quotaPercent}%` : "∞"}</span></div>
+          </article>
+        </section>
+
+        <section className="mt-3 flex items-center justify-between gap-6 px-1 py-4 max-md:items-start max-md:flex-col">
           <div>
-            <p className="mb-2 font-mono text-[0.65rem] tracking-[0.08em] text-brand uppercase">Application endpoint</p>
-            <code className="font-mono text-sm text-soft">POST /v1/chat/completions</code>
-            <p className="mt-3 mb-0 max-w-2xl text-sm leading-6 text-muted">External applications authenticate with a Synapse API key. Provider credentials never leave the gateway deployment.</p>
+            <p className="eyebrow mb-2 text-muted">Rate limiting</p>
+            <p className="m-0 text-sm text-soft">{rateLimitedCount.toLocaleString()} requests were limited in the last 24 hours.</p>
           </div>
-          <Link className="inline-flex min-h-11 items-center justify-center border border-line-strong px-4 text-sm font-semibold text-soft transition-colors hover:border-brand hover:text-brand" href="/dashboard/api-keys">Create application key</Link>
+          <Link className="text-sm text-brand hover:text-brand-light" href="/dashboard/requests">Inspect request history <span aria-hidden="true">↗</span></Link>
         </section>
       </div>
     </div>
