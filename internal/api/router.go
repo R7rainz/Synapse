@@ -9,6 +9,8 @@ import (
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("GET /healthz", h.HandleHealth)
+	mux.HandleFunc("GET /readyz", h.HandleReadiness)
 	mux.Handle("GET /profile", h.auth.Middleware(http.HandlerFunc(h.HandleProfile)))
 	mux.Handle("POST /documents", h.auth.Middleware(http.HandlerFunc(h.HandleCreateDocument)))
 	mux.Handle("GET /documents", h.auth.Middleware(http.HandlerFunc(h.HandleListDocuments)))

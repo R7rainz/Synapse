@@ -1,12 +1,21 @@
 package api
 
 import (
+	"context"
+
 	apikey "github.com/r7rainz/synapse/internal/apiKey"
 	"github.com/r7rainz/synapse/internal/auth"
 	"github.com/r7rainz/synapse/internal/document"
 	"github.com/r7rainz/synapse/internal/gateway"
 	"github.com/r7rainz/synapse/internal/llmrequest"
+	"go.uber.org/zap"
 )
+
+type DatabasePinger interface {
+	Ping(context.Context) error
+}
+
+var nopLogger = zap.NewNop()
 
 type Handler struct {
 	key                     apikey.Repository
@@ -14,6 +23,8 @@ type Handler struct {
 	gateway                 *gateway.Client
 	llmrequest              llmrequest.Repository
 	documents               document.Repository
+	database                DatabasePinger
+	logger                  *zap.Logger
 	provider                string
 	embeddingModel          string
 	allowedModels           map[string]struct{}
@@ -36,7 +47,7 @@ type GatewayPolicyConfig struct {
 	MaxOutputTokens int
 }
 
-func NewHandler(key apikey.Repository, verifier *auth.Verifier, gateway *gateway.Client, requests llmrequest.Repository, documents document.Repository, provider, embeddingModel string, policy GatewayPolicyConfig, limits RateLimitConfig) *Handler {
+func NewHandler(key apikey.Repository, verifier *auth.Verifier, gateway *gateway.Client, requests llmrequest.Repository, documents document.Repository, database DatabasePinger, provider, embeddingModel string, policy GatewayPolicyConfig, limits RateLimitConfig, logger *zap.Logger) *Handler {
 	allowedModels := make(map[string]struct{}, len(policy.AllowedModels))
 	for _, model := range policy.AllowedModels {
 		allowedModels[model] = struct{}{}
@@ -48,6 +59,8 @@ func NewHandler(key apikey.Repository, verifier *auth.Verifier, gateway *gateway
 		gateway:                 gateway,
 		llmrequest:              requests,
 		documents:               documents,
+		database:                database,
+		logger:                  logger,
 		provider:                provider,
 		embeddingModel:          embeddingModel,
 		allowedModels:           allowedModels,
@@ -57,4 +70,11 @@ func NewHandler(key apikey.Repository, verifier *auth.Verifier, gateway *gateway
 		userTokensPerMonth:      limits.UserTokensPerMonth,
 		apiKeyTokensPerMonth:    limits.APIKeyTokensPerMonth,
 	}
+}
+
+func (h *Handler) log() *zap.Logger {
+	if h.logger == nil {
+		return nopLogger
+	}
+	return h.logger
 }

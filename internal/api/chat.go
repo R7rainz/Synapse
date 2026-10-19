@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -21,6 +20,7 @@ import (
 	"github.com/r7rainz/synapse/internal/document"
 	"github.com/r7rainz/synapse/internal/gateway"
 	"github.com/r7rainz/synapse/internal/llmrequest"
+	"go.uber.org/zap"
 )
 
 const (
@@ -179,6 +179,7 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 
 		embeddings, err := h.gateway.Embeddings(r.Context(), h.embeddingModel, []string{query})
 		if err != nil {
+			logProviderFailure(h.log(), err)
 			status, message, code, headers := providerFailure(err)
 			copyUpstreamHeaders(w.Header(), headers)
 			writeChatError(w, status, message, code)
@@ -214,6 +215,7 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 	startedAt := time.Now()
 	response, err := h.gateway.ChatCompletions(r.Context(), body, input.Stream)
 	if err != nil {
+		logProviderFailure(h.log(), err)
 		status, message, code, headers := providerFailure(err)
 		copyUpstreamHeaders(w.Header(), headers)
 		h.recordLLMRequest(r.Context(), userID, apiKeyID, input.Model, status, startedAt, false, gateway.Usage{})
@@ -238,7 +240,7 @@ func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(response.StatusCode)
 	usage, copyErr := copyChatResponse(w, response.Body, input.Stream, flusher)
 	if copyErr != nil {
-		log.Printf("failed to copy LLM response: %v", copyErr)
+		h.log().Error("failed to copy LLM response", zap.Error(copyErr))
 	}
 	statusCode := response.StatusCode
 	if errors.Is(r.Context().Err(), context.Canceled) {
@@ -494,8 +496,6 @@ func providerFailure(err error) (int, string, string, http.Header) {
 	if !errors.As(err, &providerErr) {
 		return http.StatusServiceUnavailable, "LLM provider unavailable", "provider_unavailable", nil
 	}
-	log.Printf("LLM provider request failed: status=%d code=%q request_id=%q", providerErr.StatusCode, providerErr.Code, providerErr.RequestID)
-
 	if providerErr.StatusCode == http.StatusTooManyRequests && providerErr.IsQuotaExceeded() {
 		return http.StatusServiceUnavailable, "LLM provider quota exceeded", "provider_quota_exceeded", providerErr.Header
 	}
@@ -513,6 +513,18 @@ func providerFailure(err error) (int, string, string, http.Header) {
 	default:
 		return http.StatusBadGateway, "LLM provider request failed", "provider_error", providerErr.Header
 	}
+}
+
+func logProviderFailure(logger *zap.Logger, err error) {
+	var providerErr *gateway.ProviderError
+	if !errors.As(err, &providerErr) {
+		return
+	}
+	logger.Error("LLM provider request failed",
+		zap.Int("status", providerErr.StatusCode),
+		zap.String("code", providerErr.Code),
+		zap.String("request_id", providerErr.RequestID),
+	)
 }
 
 func copyUpstreamHeaders(destination, source http.Header) {
@@ -549,7 +561,7 @@ func (h *Handler) recordLLMRequest(ctx context.Context, userID string, apiKeyID 
 		RateLimited:  rateLimited,
 	}
 	if err := h.llmrequest.CreateLLMRequest(logContext, request); err != nil {
-		log.Printf("failed to record LLM request: %v", err)
+		h.log().Error("failed to record LLM request", zap.Error(err))
 	}
 }
 

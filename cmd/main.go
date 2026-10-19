@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
-	"log"
+	"errors"
+	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,29 +16,38 @@ import (
 	"github.com/r7rainz/synapse/internal/document"
 	"github.com/r7rainz/synapse/internal/gateway"
 	"github.com/r7rainz/synapse/internal/llmrequest"
+	"github.com/r7rainz/synapse/internal/logging"
+	"go.uber.org/zap"
 )
 
 func main() {
 	cfg := config.Load()
-	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL is required")
+	logger, err := logging.New(cfg.LogFormat)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "invalid logging configuration: %v\n", err)
+		os.Exit(1)
 	}
+	defer func() { _ = logger.Sync() }()
+	if err := cfg.Validate(); err != nil {
+		logger.Fatal("invalid configuration", zap.Error(err))
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal("failed to create database pool", zap.Error(err))
 	}
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
-		log.Fatal(err)
+		logger.Fatal("failed to connect to database", zap.Error(err))
 	}
 
 	verifier, err := auth.NewVerifier(ctx, cfg.AuthJWKSURL, cfg.AuthIssuer, cfg.AuthAudience)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal("failed to initialize auth verifier", zap.Error(err))
 	}
 	keys := apikey.NewPostgresRepository(pool)
 	gateway := gateway.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey)
@@ -48,6 +59,7 @@ func main() {
 		gateway,
 		requests,
 		documents,
+		pool,
 		cfg.LLMProvider,
 		cfg.LLMEmbeddingModel,
 		api.GatewayPolicyConfig{
@@ -60,18 +72,23 @@ func main() {
 			UserTokensPerMonth:      cfg.GatewayUserTokensPerMonth,
 			APIKeyTokensPerMonth:    cfg.GatewayAPIKeyTokensPerMonth,
 		},
+		logger,
 	)
 
-	log.Printf("Server running on port %s...", cfg.Port)
+	logger.Info("server started",
+		zap.String("addr", cfg.Port),
+		zap.String("provider", cfg.LLMProvider),
+		zap.Int("allowed_model_count", len(cfg.GatewayAllowedModels)),
+	)
 	server := &http.Server{
 		Addr:              cfg.Port,
-		Handler:           api.CORS(cfg.FrontendOrigin, handler.Routes()),
+		Handler:           api.Logging(logger, api.CORS(cfg.FrontendOrigin, handler.Routes())),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      3 * time.Minute,
 		IdleTimeout:       2 * time.Minute,
 	}
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatal(err)
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Fatal("server stopped unexpectedly", zap.Error(err))
 	}
 }

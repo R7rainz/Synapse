@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -8,6 +10,7 @@ import (
 
 type Config struct {
 	Port                           string
+	LogFormat                      string
 	DatabaseURL                    string
 	AuthJWKSURL                    string
 	AuthIssuer                     string
@@ -30,6 +33,7 @@ func Load() Config {
 
 	return Config{
 		Port:                           ":1234",
+		LogFormat:                      valueOrDefault("LOG_FORMAT", "console"),
 		DatabaseURL:                    os.Getenv("DATABASE_URL"),
 		AuthJWKSURL:                    valueOrDefault("AUTH_JWKS_URL", strings.TrimRight(authIssuer, "/")+"/api/auth/jwks"),
 		AuthIssuer:                     authIssuer,
@@ -46,6 +50,33 @@ func Load() Config {
 		GatewayUserTokensPerMonth:      int64ValueOrDefault("GATEWAY_USER_TOKENS_PER_MONTH", 0),
 		GatewayAPIKeyTokensPerMonth:    int64ValueOrDefault("GATEWAY_API_KEY_TOKENS_PER_MONTH", 0),
 	}
+}
+
+func (c Config) Validate() error {
+	for name, value := range map[string]string{
+		"DATABASE_URL": c.DatabaseURL,
+		"LLM_PROVIDER": c.LLMProvider,
+		"LLM_API_KEY":  c.LLMAPIKey,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("%s is required", name)
+		}
+	}
+
+	providerURL, err := url.Parse(c.LLMBaseURL)
+	if err != nil || providerURL.Host == "" || (providerURL.Scheme != "http" && providerURL.Scheme != "https") {
+		return fmt.Errorf("LLM_BASE_URL must be a valid HTTP(S) URL")
+	}
+	if len(c.GatewayAllowedModels) == 0 {
+		return fmt.Errorf("GATEWAY_ALLOWED_MODELS must contain at least one model")
+	}
+	if c.GatewayMaxOutputTokens < 1 {
+		return fmt.Errorf("GATEWAY_MAX_OUTPUT_TOKENS must be positive")
+	}
+	if format := strings.ToLower(strings.TrimSpace(c.LogFormat)); format != "console" && format != "json" {
+		return fmt.Errorf("LOG_FORMAT must be console or json")
+	}
+	return nil
 }
 
 func stringListValueOrDefault(name, fallback string) []string {
