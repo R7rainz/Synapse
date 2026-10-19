@@ -15,6 +15,12 @@ Synapse is an OpenAI-compatible LLM gateway with authentication, API-key managem
 - **Observability:** Provider status, latency, rate-limit state, and token usage are recorded for the dashboard while provider failures are translated into stable Synapse errors.
 - **Operations:** Zap emits readable console logs locally or JSON logs when `LOG_FORMAT=json`; `/healthz` reports process liveness and `/readyz` reports PostgreSQL readiness without calling the paid provider.
 
+### Local mock mode
+
+Set `LLM_MODE=mock` to run the gateway without an LLM provider key or outbound provider calls. Mock chat completions keep the OpenAI-compatible response shape, support streaming, and report whether retrieved document context was included. Mock embeddings are deterministic 1,536-dimensional vectors, so document upload and retrieval can be exercised locally; they are for plumbing checks, not answer quality.
+
+In this mode, `LLM_PROVIDER`, `LLM_BASE_URL`, and `LLM_API_KEY` can be empty. Switch back to `LLM_MODE=provider` when you want real model responses.
+
 ### Main components
 
 | Component | Responsibility |

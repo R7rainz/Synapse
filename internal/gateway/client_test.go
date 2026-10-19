@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -12,6 +13,36 @@ func TestChatCompletionsRequiresProvider(t *testing.T) {
 	_, err := NewClient("", "").ChatCompletions(t.Context(), []byte(`{}`), false)
 	if !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("error = %v, want ErrNotConfigured", err)
+	}
+}
+
+func TestMockClientSupportsChatAndEmbeddings(t *testing.T) {
+	client := NewMockClient()
+	response, err := client.ChatCompletions(t.Context(), []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var completion struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&completion); err != nil {
+		t.Fatal(err)
+	}
+	if len(completion.Choices) != 1 || !strings.Contains(completion.Choices[0].Message.Content, "local mode") {
+		t.Fatalf("unexpected mock completion: %#v", completion)
+	}
+
+	embeddings, err := client.Embeddings(t.Context(), "ignored", []string{"hello"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(embeddings) != 1 || len(embeddings[0]) != mockEmbeddingDimensions {
+		t.Fatalf("unexpected mock embeddings shape: %d x %d", len(embeddings), len(embeddings[0]))
 	}
 }
 

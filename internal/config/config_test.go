@@ -8,6 +8,7 @@ import (
 func validConfig() Config {
 	return Config{
 		DatabaseURL:            "postgres://localhost/synapse",
+		LLMMode:                "provider",
 		LLMProvider:            "openai",
 		LLMBaseURL:             "https://api.openai.com/v1",
 		LLMAPIKey:              "secret-api-key",

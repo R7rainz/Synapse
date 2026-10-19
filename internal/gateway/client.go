@@ -46,6 +46,7 @@ func (e *ProviderError) IsQuotaExceeded() bool {
 type Client struct {
 	baseURL    string
 	apiKey     string
+	mode       string
 	httpClient *http.Client
 }
 
@@ -56,15 +57,27 @@ func NewClient(baseURL, apiKey string) *Client {
 	return &Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		apiKey:     apiKey,
+		mode:       "provider",
 		httpClient: &http.Client{Transport: transport},
 	}
 }
 
+func NewMockClient() *Client {
+	return &Client{mode: "mock"}
+}
+
 func (c *Client) ChatCompletions(ctx context.Context, body []byte, stream bool) (*http.Response, error) {
+	if c.mode == "mock" {
+		return c.mockChatCompletions(ctx, body, stream)
+	}
 	return c.do(ctx, "/chat/completions", body, !stream)
 }
 
 func (c *Client) Embeddings(ctx context.Context, model string, inputs []string) ([][]float64, error) {
+	if c.mode == "mock" {
+		return mockEmbeddings(inputs), nil
+	}
+
 	body, err := json.Marshal(struct {
 		Model string   `json:"model"`
 		Input []string `json:"input"`

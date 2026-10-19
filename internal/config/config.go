@@ -16,6 +16,7 @@ type Config struct {
 	AuthIssuer                     string
 	AuthAudience                   string
 	FrontendOrigin                 string
+	LLMMode                        string
 	LLMProvider                    string
 	LLMBaseURL                     string
 	LLMAPIKey                      string
@@ -39,6 +40,7 @@ func Load() Config {
 		AuthIssuer:                     authIssuer,
 		AuthAudience:                   valueOrDefault("AUTH_AUDIENCE", "synapse-api"),
 		FrontendOrigin:                 valueOrDefault("FRONTEND_ORIGIN", "http://localhost:3000"),
+		LLMMode:                        strings.ToLower(strings.TrimSpace(valueOrDefault("LLM_MODE", "provider"))),
 		LLMProvider:                    os.Getenv("LLM_PROVIDER"),
 		LLMBaseURL:                     os.Getenv("LLM_BASE_URL"),
 		LLMAPIKey:                      os.Getenv("LLM_API_KEY"),
@@ -53,19 +55,28 @@ func Load() Config {
 }
 
 func (c Config) Validate() error {
-	for name, value := range map[string]string{
-		"DATABASE_URL": c.DatabaseURL,
-		"LLM_PROVIDER": c.LLMProvider,
-		"LLM_API_KEY":  c.LLMAPIKey,
-	} {
-		if strings.TrimSpace(value) == "" {
-			return fmt.Errorf("%s is required", name)
-		}
+	if strings.TrimSpace(c.DatabaseURL) == "" {
+		return fmt.Errorf("DATABASE_URL is required")
 	}
 
-	providerURL, err := url.Parse(c.LLMBaseURL)
-	if err != nil || providerURL.Host == "" || (providerURL.Scheme != "http" && providerURL.Scheme != "https") {
-		return fmt.Errorf("LLM_BASE_URL must be a valid HTTP(S) URL")
+	mode := strings.ToLower(strings.TrimSpace(c.LLMMode))
+	if mode != "provider" && mode != "mock" {
+		return fmt.Errorf("LLM_MODE must be provider or mock")
+	}
+	if mode == "provider" {
+		for name, value := range map[string]string{
+			"LLM_PROVIDER": c.LLMProvider,
+			"LLM_API_KEY":  c.LLMAPIKey,
+		} {
+			if strings.TrimSpace(value) == "" {
+				return fmt.Errorf("%s is required", name)
+			}
+		}
+
+		providerURL, err := url.Parse(c.LLMBaseURL)
+		if err != nil || providerURL.Host == "" || (providerURL.Scheme != "http" && providerURL.Scheme != "https") {
+			return fmt.Errorf("LLM_BASE_URL must be a valid HTTP(S) URL")
+		}
 	}
 	if len(c.GatewayAllowedModels) == 0 {
 		return fmt.Errorf("GATEWAY_ALLOWED_MODELS must contain at least one model")

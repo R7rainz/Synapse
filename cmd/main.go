@@ -50,17 +50,24 @@ func main() {
 		logger.Fatal("failed to initialize auth verifier", zap.Error(err))
 	}
 	keys := apikey.NewPostgresRepository(pool)
-	gateway := gateway.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey)
+	var gatewayClient *gateway.Client
+	provider := cfg.LLMProvider
+	if cfg.LLMMode == "mock" {
+		gatewayClient = gateway.NewMockClient()
+		provider = "mock"
+	} else {
+		gatewayClient = gateway.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey)
+	}
 	requests := llmrequest.NewPostgresRepository(pool)
 	documents := document.NewPostgresRepository(pool)
 	handler := api.NewHandler(
 		keys,
 		verifier,
-		gateway,
+		gatewayClient,
 		requests,
 		documents,
 		pool,
-		cfg.LLMProvider,
+		provider,
 		cfg.LLMEmbeddingModel,
 		api.GatewayPolicyConfig{
 			AllowedModels:   cfg.GatewayAllowedModels,
@@ -77,7 +84,8 @@ func main() {
 
 	logger.Info("server started",
 		zap.String("addr", cfg.Port),
-		zap.String("provider", cfg.LLMProvider),
+		zap.String("mode", cfg.LLMMode),
+		zap.String("provider", provider),
 		zap.Int("allowed_model_count", len(cfg.GatewayAllowedModels)),
 	)
 	server := &http.Server{
