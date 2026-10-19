@@ -13,6 +13,7 @@ Synapse is an OpenAI-compatible LLM gateway with authentication, API-key managem
 - **Request pipeline:** The Go gateway authenticates the caller, validates the request and model, enforces output limits, request-rate limits, and monthly token quotas, then proxies the request to OpenAI.
 - **RAG:** Documents are chunked and embedded, their 1,536-dimensional vectors are stored in PostgreSQL with pgvector, and relevant chunks are added as untrusted reference context before chat completion.
 - **Observability:** Provider status, latency, rate-limit state, and token usage are recorded for the dashboard while provider failures are translated into stable Synapse errors.
+- **Operations:** Zap emits readable console logs locally or JSON logs when `LOG_FORMAT=json`; `/healthz` reports process liveness and `/readyz` reports PostgreSQL readiness without calling the paid provider.
 
 ### Main components
 
@@ -26,4 +27,5 @@ Synapse is an OpenAI-compatible LLM gateway with authentication, API-key managem
 | `internal/gateway/` | OpenAI chat and embedding client, retries, usage parsing, and provider errors |
 | `internal/document/` | Document chunking, pgvector persistence, ownership checks, and similarity search |
 | `internal/llmrequest/` | Request logs, rate limits, token quotas, and dashboard metrics |
+| `internal/logging/` | Zap logger configuration for console and JSON output |
 | `migrations/` | PostgreSQL, Better Auth, gateway, and pgvector schema migrations |

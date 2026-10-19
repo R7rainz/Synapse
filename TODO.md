@@ -39,7 +39,8 @@
 - [ ] Add rate limiting and abuse protection to auth and gateway endpoints.
 - [ ] Add email verification and password reset using a transactional email provider.
 - [ ] Upgrade Next.js from `16.4.0` to the current patched release before production.
-- [ ] Add production logging, error tracking, and health checks.
+- [x] Add structured logging and liveness/readiness health checks.
+- [ ] Add production error tracking.
 
 ## 4. Complete the LLM gateway
 
