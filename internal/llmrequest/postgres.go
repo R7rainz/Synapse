@@ -100,6 +100,87 @@ func (r *PostgresRepository) SummaryByUser(ctx context.Context, userID string) (
 	return summary, nil
 }
 
+func (r *PostgresRepository) UsageByUser(ctx context.Context, userID string) (*UsageReport, error) {
+	report := &UsageReport{Models: make([]ModelUsage, 0)}
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE created_at >= now() - interval '24 hours'),
+			COUNT(*) FILTER (WHERE created_at >= now() - interval '24 hours' AND (status_code < 200 OR status_code >= 300)),
+			COUNT(*) FILTER (WHERE created_at >= now() - interval '24 hours' AND rate_limited),
+			COALESCE(ROUND(AVG(latency_ms) FILTER (WHERE created_at >= now() - interval '24 hours')), 0)::bigint,
+			COALESCE(SUM(input_tokens::bigint) FILTER (WHERE created_at >= now() - interval '24 hours'), 0),
+			COALESCE(SUM(output_tokens::bigint) FILTER (WHERE created_at >= now() - interval '24 hours'), 0),
+			COUNT(*) FILTER (WHERE created_at >= date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC'),
+			COUNT(*) FILTER (WHERE created_at >= date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC' AND (status_code < 200 OR status_code >= 300)),
+			COUNT(*) FILTER (WHERE created_at >= date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC' AND rate_limited),
+			COALESCE(ROUND(AVG(latency_ms) FILTER (WHERE created_at >= date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC')), 0)::bigint,
+			COALESCE(SUM(input_tokens::bigint) FILTER (WHERE created_at >= date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC'), 0),
+			COALESCE(SUM(output_tokens::bigint) FILTER (WHERE created_at >= date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC'), 0)
+		FROM llm_requests
+		WHERE user_id = $1
+	`, userID).Scan(
+		&report.Last24Hours.RequestCount,
+		&report.Last24Hours.ErrorCount,
+		&report.Last24Hours.RateLimitedCount,
+		&report.Last24Hours.AverageLatencyMS,
+		&report.Last24Hours.InputTokens,
+		&report.Last24Hours.OutputTokens,
+		&report.MonthToDate.RequestCount,
+		&report.MonthToDate.ErrorCount,
+		&report.MonthToDate.RateLimitedCount,
+		&report.MonthToDate.AverageLatencyMS,
+		&report.MonthToDate.InputTokens,
+		&report.MonthToDate.OutputTokens,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	report.Last24Hours.TotalTokens = report.Last24Hours.InputTokens + report.Last24Hours.OutputTokens
+	report.MonthToDate.TotalTokens = report.MonthToDate.InputTokens + report.MonthToDate.OutputTokens
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			model,
+			COUNT(*),
+			COUNT(*) FILTER (WHERE status_code < 200 OR status_code >= 300),
+			COALESCE(ROUND(AVG(latency_ms)), 0)::bigint,
+			COALESCE(SUM(input_tokens::bigint), 0),
+			COALESCE(SUM(output_tokens::bigint), 0),
+			COALESCE(SUM(input_tokens::bigint + output_tokens::bigint), 0) AS total_tokens
+		FROM llm_requests
+		WHERE user_id = $1
+			AND created_at >= date_trunc('month', timezone('UTC', now())) AT TIME ZONE 'UTC'
+		GROUP BY model
+		ORDER BY total_tokens DESC, model ASC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		model := ModelUsage{}
+		if err := rows.Scan(
+			&model.Model,
+			&model.RequestCount,
+			&model.ErrorCount,
+			&model.AverageLatencyMS,
+			&model.InputTokens,
+			&model.OutputTokens,
+			&model.TotalTokens,
+		); err != nil {
+			return nil, err
+		}
+		report.Models = append(report.Models, model)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return report, nil
+}
+
 func (r *PostgresRepository) ListByUser(ctx context.Context, userID string, limit int) ([]*RequestRecord, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT r.id, r.api_key_id, k.name, k.key_prefix, r.provider, r.model, r.status_code, r.latency_ms, r.created_at

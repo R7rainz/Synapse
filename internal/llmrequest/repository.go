@@ -9,3 +9,7 @@ type Repository interface {
 	SummaryByUser(context.Context, string) (*Summary, error)
 	ListByUser(context.Context, string, int) ([]*RequestRecord, error)
 }
+
+type UsageReporter interface {
+	UsageByUser(context.Context, string) (*UsageReport, error)
+}

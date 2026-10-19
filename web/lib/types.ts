@@ -38,6 +38,37 @@ export type GatewaySummary = {
   monthly_token_quota: number;
 };
 
+export type GatewayUsagePeriod = {
+  request_count: number;
+  error_count: number;
+  rate_limited_count: number;
+  average_latency_ms: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+};
+
+export type GatewayUsageModel = {
+  model: string;
+  request_count: number;
+  error_count: number;
+  average_latency_ms: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+};
+
+export type GatewayUsage = {
+  last_24h: GatewayUsagePeriod;
+  month_to_date: GatewayUsagePeriod;
+  quota: {
+    used: number;
+    limit: number;
+    remaining: number;
+  };
+  models: GatewayUsageModel[];
+};
+
 export type GatewayRequest = {
   id: string;
   api_key_id?: string;

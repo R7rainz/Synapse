@@ -1,4 +1,5 @@
 import { authClient } from "@/lib/auth-client";
+import type { GatewayUsage } from "@/lib/types";
 
 export const apiURL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:1234";
 
@@ -20,4 +21,8 @@ export async function readResponse<T>(response: Response): Promise<T> {
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export async function fetchGatewayUsage(): Promise<GatewayUsage> {
+  return readResponse<GatewayUsage>(await apiFetch("/gateway/usage"));
 }

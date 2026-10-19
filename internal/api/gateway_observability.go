@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/r7rainz/synapse/internal/auth"
+	"github.com/r7rainz/synapse/internal/llmrequest"
 )
 
 const (
@@ -57,6 +58,40 @@ func (h *Handler) handleGatewaySummary(w http.ResponseWriter, r *http.Request, u
 		MonthlyTokens:     summary.MonthlyTokens,
 		MonthlyTokenQuota: h.userTokensPerMonth,
 	})
+}
+
+func (h *Handler) HandleGatewayUsage(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	reporter, ok := h.llmrequest.(llmrequest.UsageReporter)
+	if !ok {
+		http.Error(w, "Usage reporting is unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	usage, err := reporter.UsageByUser(r.Context(), claims.Subject)
+	if err != nil {
+		http.Error(w, "Could not load gateway usage", http.StatusInternalServerError)
+		return
+	}
+
+	usage.Quota = llmrequest.UsageQuota{
+		Used:  usage.MonthToDate.TotalTokens,
+		Limit: h.userTokensPerMonth,
+	}
+	if h.userTokensPerMonth > 0 {
+		usage.Quota.Remaining = h.userTokensPerMonth - usage.Quota.Used
+		if usage.Quota.Remaining < 0 {
+			usage.Quota.Remaining = 0
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(usage)
 }
 
 func (h *Handler) HandleGatewayRequests(w http.ResponseWriter, r *http.Request) {

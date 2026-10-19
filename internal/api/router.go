@@ -18,6 +18,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("POST /api-keys", h.auth.Middleware(http.HandlerFunc(h.HandlerCreateAPIKey)))
 	mux.Handle("DELETE /api-keys/{id}", h.auth.Middleware(http.HandlerFunc(h.HandlerRevokeAPIKey)))
 	mux.Handle("GET /gateway/summary", h.auth.Middleware(http.HandlerFunc(h.HandleGatewaySummary)))
+	mux.Handle("GET /gateway/usage", h.auth.Middleware(http.HandlerFunc(h.HandleGatewayUsage)))
 	mux.Handle("GET /gateway/requests", h.auth.Middleware(http.HandlerFunc(h.HandleGatewayRequests)))
 	mux.Handle("POST /playground/chat/completions", h.auth.Middleware(http.HandlerFunc(h.HandlePlaygroundChatCompletions)))
 	mux.Handle("POST /v1/chat/completions", apikey.Middleware(h.key, http.HandlerFunc(h.HandleChatCompletions)))
